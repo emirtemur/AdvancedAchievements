@@ -265,7 +265,7 @@ public class AdvancementManager implements Reloadable {
 						// recreates them after a restart.
 						state.terminal = true;
 						stopGenerationTask();
-						logger.info("Removed " + toRemove.size() + " advancement files; they will be regenerated on the "
+						logger.warning("Removed " + toRemove.size() + " advancement files; they will be regenerated on the "
 								+ "next server restart as this server cannot reload its data at runtime.");
 						if (feedback != null) {
 							feedback.sendMessage("§eOld advancements were removed. Restart the server to regenerate them, "
@@ -336,7 +336,7 @@ public class AdvancementManager implements Reloadable {
 			Bukkit.reloadData();
 			return true;
 		} catch (UnsupportedOperationException e) {
-			logger.log(Level.WARNING, "Server data cannot be reloaded at runtime on this Folia server.", e);
+			// Expected on Folia: the caller logs a single-line warning, a stack trace would only clutter the logs.
 			return false;
 		}
 	}

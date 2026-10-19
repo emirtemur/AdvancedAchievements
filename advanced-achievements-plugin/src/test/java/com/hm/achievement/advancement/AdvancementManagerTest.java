@@ -257,6 +257,10 @@ class AdvancementManagerTest {
 		verify(complete, never()).run();
 		verify(feedback).sendMessage("§eOld advancements were removed. Restart the server to regenerate them, as this "
 				+ "server cannot reload its data at runtime.");
+		// A single-line warning, without stack trace.
+		verify(logger).warning("Removed 1 advancement files; they will be regenerated on the next server restart as "
+				+ "this server cannot reload its data at runtime.");
+		verify(logger, never()).log(any(Level.class), anyString(), any(Throwable.class));
 	}
 
 	private AdvancementManager foliaManager(ArgumentCaptor<Runnable> scheduled, TaskScheduler.Task task) {
