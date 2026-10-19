@@ -8,7 +8,7 @@ Advanced Achievements adds configurable, server-wide achievement progression to 
 
 ## Requirements
 
-- Paper or Purpur 1.21 or newer
+- Paper, Purpur or Folia 1.21 or newer
 - Java 21 or newer
 - Optional integrations: Vault, PlaceholderAPI, EssentialsX, PetMaster, and Jobs Reborn
 

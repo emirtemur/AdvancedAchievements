@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Folia support: the plugin declares `folia-supported` and schedules work on the global region, entity and async schedulers when running on Folia. Paper and Purpur behaviour is unchanged.
+- On Folia, `/aach generate` removes old advancements and regenerates them on the next restart, as Folia cannot reload server data at runtime.
+
+### Fixed
+
+- Cached statistic increments are now atomic, so concurrent updates are no longer lost.
+- Ranking, inspect, book, toggle and cooldown caches are now safe to access from several threads.
+- Reloading publishes achievements and GUI items atomically instead of clearing and refilling them in place.
+- A null teleport destination no longer breaks distance tracking.
+
 ## 12.0
 
 ### Added
