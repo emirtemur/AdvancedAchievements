@@ -1,5 +1,7 @@
 package com.hm.achievement.lifecycle;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -41,6 +43,7 @@ import com.hm.achievement.listener.statistics.DropsListener;
 import com.hm.achievement.placeholder.AchievementPlaceholderHook;
 import com.hm.achievement.runnable.AchieveDistanceRunnable;
 import com.hm.achievement.runnable.AchievePlayTimeRunnable;
+import com.hm.achievement.scheduler.PerPlayerTasks;
 import com.hm.achievement.scheduler.TaskScheduler;
 
 import dagger.Lazy;
@@ -62,7 +65,8 @@ class PluginLoaderTest {
 				mock(AbstractDatabaseManager.class), mock(AsyncCachedRequestsSender.class),
 				mock(PluginCommandExecutor.class), mock(CommandTabCompleter.class), Collections.emptySet(),
 				new YamlConfiguration(), mock(ConfigurationParser.class), mock(AchieveDistanceRunnable.class),
-				mock(AchievePlayTimeRunnable.class), mock(ReloadCommand.class), mock(JobsEnableWatcher.class), new TaskScheduler(plugin, false));
+				mock(AchievePlayTimeRunnable.class), mock(ReloadCommand.class), mock(JobsEnableWatcher.class), new TaskScheduler(plugin, false),
+				mock(PerPlayerTasks.class));
 
 		underTest.registerListeners();
 
@@ -86,7 +90,8 @@ class PluginLoaderTest {
 				mock(AsyncCachedRequestsSender.class), mock(PluginCommandExecutor.class), mock(CommandTabCompleter.class),
 				Collections.singleton(NormalAchievements.DROPS), new YamlConfiguration(), mock(ConfigurationParser.class),
 				mock(AchieveDistanceRunnable.class), mock(AchievePlayTimeRunnable.class), mock(ReloadCommand.class),
-				mock(JobsEnableWatcher.class), new TaskScheduler(plugin, false));
+				mock(JobsEnableWatcher.class), new TaskScheduler(plugin, false),
+				mock(PerPlayerTasks.class));
 
 		underTest.registerListeners();
 
@@ -107,7 +112,8 @@ class PluginLoaderTest {
 				mock(AbstractDatabaseManager.class), requestsSender, mock(PluginCommandExecutor.class),
 				mock(CommandTabCompleter.class), disabledCategories, mainConfig, mock(ConfigurationParser.class),
 				mock(AchieveDistanceRunnable.class), mock(AchievePlayTimeRunnable.class), mock(ReloadCommand.class),
-				mock(JobsEnableWatcher.class), new TaskScheduler(plugin, false));
+				mock(JobsEnableWatcher.class), new TaskScheduler(plugin, false),
+				mock(PerPlayerTasks.class));
 		BukkitScheduler scheduler = mock(BukkitScheduler.class);
 		BukkitTask firstSenderTask = mock(BukkitTask.class);
 		BukkitTask secondSenderTask = mock(BukkitTask.class);
@@ -129,6 +135,34 @@ class PluginLoaderTest {
 
 		verify(firstSenderTask).cancel();
 		verify(firstCleanerTask).cancel();
+	}
+
+	@Test
+	void shouldMonitorPlayersWithPerPlayerTasksOnFolia() {
+		AdvancedAchievements plugin = mock(AdvancedAchievements.class);
+		YamlConfiguration mainConfig = new YamlConfiguration();
+		mainConfig.set("PlaytimeTaskInterval", 60);
+		mainConfig.set("DistanceTaskInterval", 5);
+		TaskScheduler taskScheduler = mock(TaskScheduler.class);
+		when(taskScheduler.isFolia()).thenReturn(true);
+		PerPlayerTasks perPlayerTasks = mock(PerPlayerTasks.class);
+		AchievePlayTimeRunnable playTimeRunnable = mock(AchievePlayTimeRunnable.class);
+		AchieveDistanceRunnable distanceRunnable = mock(AchieveDistanceRunnable.class);
+		PluginLoader underTest = new PluginLoader(plugin, Logger.getAnonymousLogger(), Collections.emptySet(),
+				mock(JoinListener.class), mock(AdvancementTabListener.class), mock(ListGUIListener.class),
+				mock(TeleportListener.class), mock(PlayerAdvancedAchievementListener.class), mock(Cleaner.class),
+				mockPlaceholderHook(), mock(AbstractDatabaseManager.class), mock(AsyncCachedRequestsSender.class),
+				mock(PluginCommandExecutor.class), mock(CommandTabCompleter.class), new HashSet<>(), mainConfig,
+				mock(ConfigurationParser.class), distanceRunnable, playTimeRunnable, mock(ReloadCommand.class),
+				mock(JobsEnableWatcher.class), taskScheduler, perPlayerTasks);
+
+		underTest.launchScheduledTasks();
+
+		verify(perPlayerTasks).cancelAll();
+		verify(perPlayerTasks).schedule(any(), eq(1200L));
+		verify(perPlayerTasks).schedule(any(), eq(100L));
+		verify(taskScheduler, never()).runGlobalTimer(eq(playTimeRunnable), anyLong(), anyLong());
+		verify(taskScheduler, never()).runGlobalTimer(eq(distanceRunnable), anyLong(), anyLong());
 	}
 
 	@SuppressWarnings("unchecked")

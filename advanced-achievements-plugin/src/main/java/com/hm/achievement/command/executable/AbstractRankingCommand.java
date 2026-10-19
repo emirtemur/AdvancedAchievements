@@ -58,7 +58,7 @@ public abstract class AbstractRankingCommand extends AbstractCommand {
 	private boolean cacheRefreshInProgress;
 	private long lastCacheUpdate = 0L;
 
-	AbstractRankingCommand(YamlConfiguration mainConfig, YamlConfiguration langConfig, StringBuilder pluginHeader,
+	AbstractRankingCommand(YamlConfiguration mainConfig, YamlConfiguration langConfig, StringBuffer pluginHeader,
 			TaskScheduler taskScheduler, Logger logger, String languageKey,
 			AbstractDatabaseManager databaseManager, SoundPlayer soundPlayer) {
 		super(mainConfig, langConfig, pluginHeader);

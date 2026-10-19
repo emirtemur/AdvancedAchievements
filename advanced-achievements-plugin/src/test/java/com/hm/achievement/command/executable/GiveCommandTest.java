@@ -45,7 +45,7 @@ class GiveCommandTest {
 		achievementMap.put(achievement);
 		CacheManager cacheManager = mock(CacheManager.class);
 		PlayerAdvancedAchievementListener achievementListener = mock(PlayerAdvancedAchievementListener.class);
-		GiveCommand underTest = new GiveCommand(mainConfig, langConfig, new StringBuilder(), cacheManager, achievementMap,
+		GiveCommand underTest = new GiveCommand(mainConfig, langConfig, new StringBuffer(), cacheManager, achievementMap,
 				achievementListener, mock(TaskScheduler.class));
 		underTest.extractConfigurationParameters();
 		CommandSender sender = mock(CommandSender.class);
@@ -64,7 +64,7 @@ class GiveCommandTest {
 		YamlConfiguration langConfig = new YamlConfiguration();
 		langConfig.set("no-permissions", "No permission");
 		PlayerAdvancedAchievementListener achievementListener = mock(PlayerAdvancedAchievementListener.class);
-		GiveCommand underTest = new GiveCommand(new YamlConfiguration(), langConfig, new StringBuilder(),
+		GiveCommand underTest = new GiveCommand(new YamlConfiguration(), langConfig, new StringBuffer(),
 				mock(CacheManager.class), new AchievementMap(), achievementListener, mock(TaskScheduler.class));
 		underTest.extractConfigurationParameters();
 		CommandSender sender = mock(CommandSender.class);
@@ -93,7 +93,7 @@ class GiveCommandTest {
 		achievementMap.put(achievement);
 		PlayerAdvancedAchievementListener achievementListener = mock(PlayerAdvancedAchievementListener.class);
 		TaskScheduler taskScheduler = mock(TaskScheduler.class);
-		GiveCommand underTest = new GiveCommand(mainConfig, langConfig, new StringBuilder(), mock(CacheManager.class),
+		GiveCommand underTest = new GiveCommand(mainConfig, langConfig, new StringBuffer(), mock(CacheManager.class),
 				achievementMap, achievementListener, taskScheduler);
 		underTest.extractConfigurationParameters();
 		CommandSender sender = mock(CommandSender.class);

@@ -67,7 +67,7 @@ public class HelpCommand extends AbstractCommand {
 
 	@Inject
 	public HelpCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			StringBuilder pluginHeader, FancyMessageSender fancyMessageSender) {
+			StringBuffer pluginHeader, FancyMessageSender fancyMessageSender) {
 		super(mainConfig, langConfig, pluginHeader);
 		this.fancyMessageSender = fancyMessageSender;
 	}

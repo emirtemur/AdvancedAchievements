@@ -14,7 +14,6 @@ import com.earth2me.essentials.Essentials;
 import com.hm.achievement.category.NormalAchievements;
 import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.CacheManager;
-import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.StatisticIncreaseHandler;
 
 /**
@@ -28,8 +27,6 @@ public class AchievePlayTimeRunnable extends StatisticIncreaseHandler implements
 
 	private static final long MILLIS_PER_HOUR = TimeUnit.HOURS.toMillis(1);
 
-	private final TaskScheduler taskScheduler;
-
 	private Essentials essentials;
 	private long previousTimeMillis;
 
@@ -37,9 +34,8 @@ public class AchievePlayTimeRunnable extends StatisticIncreaseHandler implements
 
 	@Inject
 	public AchievePlayTimeRunnable(@Named("main") YamlConfiguration mainConfig, AchievementMap achievementMap,
-			CacheManager cacheManager, TaskScheduler taskScheduler) {
+			CacheManager cacheManager) {
 		super(mainConfig, achievementMap, cacheManager);
-		this.taskScheduler = taskScheduler;
 
 		if (Bukkit.getPluginManager().isPluginEnabled("Essentials")) {
 			essentials = (Essentials) Bukkit.getPluginManager().getPlugin("Essentials");
@@ -59,10 +55,25 @@ public class AchievePlayTimeRunnable extends StatisticIncreaseHandler implements
 	public void run() {
 		long currentTimeMillis = System.currentTimeMillis();
 		int millisSincePreviousRun = (int) (currentTimeMillis - previousTimeMillis);
-		// With Folia, each player is processed on the region thread that owns them.
-		Bukkit.getOnlinePlayers()
-				.forEach(p -> taskScheduler.runOnEntityThread(p, () -> updateTime(p, millisSincePreviousRun)));
+		Bukkit.getOnlinePlayers().forEach(p -> updateTime(p, millisSincePreviousRun));
 		previousTimeMillis = currentTimeMillis;
+	}
+
+	/**
+	 * Creates a task monitoring the played time of a single player. Used with Folia instead of {@link #run()}, so
+	 * that each player is processed by the region thread owning them.
+	 *
+	 * @param player
+	 * @return the task to run periodically on the player's thread
+	 */
+	public Runnable createPlayerTask(Player player) {
+		long[] previousRunMillis = { System.currentTimeMillis() };
+		return () -> {
+			long currentTimeMillis = System.currentTimeMillis();
+			int millisSincePreviousRun = (int) (currentTimeMillis - previousRunMillis[0]);
+			previousRunMillis[0] = currentTimeMillis;
+			updateTime(player, millisSincePreviousRun);
+		};
 	}
 
 	/**

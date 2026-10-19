@@ -28,13 +28,13 @@ public class PluginCommandExecutor implements CommandExecutor, Reloadable {
 
 	private final YamlConfiguration langConfig;
 	private final Set<AbstractCommand> commands;
-	private final StringBuilder pluginHeader;
+	private final StringBuffer pluginHeader;
 
 	private String langInvalidCommand;
 
 	@Inject
 	public PluginCommandExecutor(@Named("lang") YamlConfiguration langConfig, Set<AbstractCommand> commands,
-			StringBuilder pluginHeader) {
+			StringBuffer pluginHeader) {
 		this.langConfig = langConfig;
 		this.commands = commands;
 		this.pluginHeader = pluginHeader;

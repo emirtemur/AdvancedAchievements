@@ -229,11 +229,8 @@ public class AdvancementManager implements Reloadable {
 		}
 
 		final List<NamespacedKey> toRemove = forceRegenerate ? findOldAchievementAdvancements() : List.of();
+		final List<LoadRequest> loads = buildLoadRequests(forceRegenerate);
 		final boolean reloadData = forceRegenerate && !toRemove.isEmpty();
-		// Folia doesn't support reloading server data at runtime. Old advancement files are still removed, and the
-		// additive generation performed on startup recreates them after a restart.
-		final boolean regenerateOnRestart = reloadData && taskScheduler.isFolia();
-		final List<LoadRequest> loads = regenerateOnRestart ? List.of() : buildLoadRequests(forceRegenerate);
 
 		if (feedback != null) {
 			feedback.sendMessage("§7Generating advancements in small batches to reduce lag...");
@@ -261,21 +258,21 @@ public class AdvancementManager implements Reloadable {
 					return;
 				}
 
-				if (regenerateOnRestart) {
-					state.terminal = true;
-					stopGenerationTask();
-					logger.info("Removed " + toRemove.size() + " advancement files; they will be regenerated on the next "
-							+ "server restart as Folia cannot reload server data at runtime.");
-					if (feedback != null) {
-						feedback.sendMessage("§eOld advancements were removed. Restart the server to regenerate them, "
-								+ "as Folia cannot reload server data at runtime.");
-					}
-					return;
-				}
-
 				if (reloadData && !state.dataReloaded) {
 					state.currentOperation = "reloading server data after removing old advancements";
-					Bukkit.reloadData();
+					if (!reloadServerData()) {
+						// Old advancement files are removed, and the additive generation performed on startup
+						// recreates them after a restart.
+						state.terminal = true;
+						stopGenerationTask();
+						logger.info("Removed " + toRemove.size() + " advancement files; they will be regenerated on the "
+								+ "next server restart as this server cannot reload its data at runtime.");
+						if (feedback != null) {
+							feedback.sendMessage("§eOld advancements were removed. Restart the server to regenerate them, "
+									+ "as this server cannot reload its data at runtime.");
+						}
+						return;
+					}
 					state.dataReloaded = true;
 
 					List<NamespacedKey> remaining = findOldAchievementAdvancements();
@@ -323,6 +320,25 @@ public class AdvancementManager implements Reloadable {
 				}
 			}
 		}, 1L, 1L);
+	}
+
+	/**
+	 * Reloads server data so that removed advancements are cleared from the live registry.
+	 *
+	 * @return false if the server doesn't support reloading its data at runtime (possible with Folia)
+	 */
+	private boolean reloadServerData() {
+		if (!taskScheduler.isFolia()) {
+			Bukkit.reloadData();
+			return true;
+		}
+		try {
+			Bukkit.reloadData();
+			return true;
+		} catch (UnsupportedOperationException e) {
+			logger.log(Level.WARNING, "Server data cannot be reloaded at runtime on this Folia server.", e);
+			return false;
+		}
 	}
 
 	private void stopGenerationTask() {

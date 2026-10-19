@@ -33,6 +33,7 @@ import com.hm.achievement.listener.statistics.AbstractListener;
 import com.hm.achievement.placeholder.AchievementPlaceholderHook;
 import com.hm.achievement.runnable.AchieveDistanceRunnable;
 import com.hm.achievement.runnable.AchievePlayTimeRunnable;
+import com.hm.achievement.scheduler.PerPlayerTasks;
 import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.scheduler.TaskScheduler.Task;
 
@@ -78,6 +79,7 @@ public class PluginLoader {
 	private final AchievePlayTimeRunnable playTimeRunnable;
 	private final Cleaner cleaner;
 	private final TaskScheduler taskScheduler;
+	private final PerPlayerTasks perPlayerTasks;
 
 	// Scheduled tasks.
 	private Task asyncCachedRequestsSenderTask;
@@ -95,7 +97,7 @@ public class PluginLoader {
 			CommandTabCompleter commandTabCompleter, Set<Category> disabledCategories,
 			@Named("main") YamlConfiguration mainConfig, ConfigurationParser configurationParser,
 			AchieveDistanceRunnable distanceRunnable, AchievePlayTimeRunnable playTimeRunnable, ReloadCommand reloadCommand,
-			JobsEnableWatcher jobsEnableWatcher, TaskScheduler taskScheduler) {
+			JobsEnableWatcher jobsEnableWatcher, TaskScheduler taskScheduler, PerPlayerTasks perPlayerTasks) {
 		this.advancedAchievements = advancedAchievements;
 		this.logger = logger;
 		this.reloadables = reloadables;
@@ -118,6 +120,7 @@ public class PluginLoader {
 		this.reloadCommand = reloadCommand;
 		this.jobsEnableWatcher = jobsEnableWatcher;
 		this.taskScheduler = taskScheduler;
+		this.perPlayerTasks = perPlayerTasks;
 	}
 
 	/**
@@ -154,6 +157,7 @@ public class PluginLoader {
 		if (distanceTask != null) {
 			distanceTask.cancel();
 		}
+		perPlayerTasks.cancelAll();
 
 		// Send remaining statistics to the database and close DatabaseManager.
 		asyncCachedRequestsSender.sendBatchedRequests();
@@ -184,6 +188,7 @@ public class PluginLoader {
 		pluginManager.registerEvents(playerAdvancedAchievementListener, advancedAchievements);
 		pluginManager.registerEvents(teleportListener, advancedAchievements);
 		pluginManager.registerEvents(jobsEnableWatcher, advancedAchievements);
+		pluginManager.registerEvents(perPlayerTasks, advancedAchievements);
 	}
 
 	/**
@@ -213,13 +218,20 @@ public class PluginLoader {
 		long cleanerTaskPeriod = mainConfig.getBoolean("BungeeMode") ? 50L : 20000L;
 		cleanerTask = taskScheduler.runGlobalTimer(cleaner, cleanerTaskPeriod, cleanerTaskPeriod);
 
+		// With Folia, players are monitored by per-player tasks running on the region threads owning them.
+		perPlayerTasks.cancelAll();
+
 		// Schedule a repeating task to monitor played time for each player (not directly related to an event).
 		cancelTask(playedTimeTask);
 		playedTimeTask = null;
 		if (!disabledCategories.contains(NormalAchievements.PLAYEDTIME)) {
 			int configPlaytimeTaskInterval = mainConfig.getInt("PlaytimeTaskInterval");
-			playedTimeTask = taskScheduler.runGlobalTimer(playTimeRunnable, configPlaytimeTaskInterval * 10L,
-					configPlaytimeTaskInterval * 20L);
+			if (taskScheduler.isFolia()) {
+				perPlayerTasks.schedule(playTimeRunnable::createPlayerTask, configPlaytimeTaskInterval * 20L);
+			} else {
+				playedTimeTask = taskScheduler.runGlobalTimer(playTimeRunnable, configPlaytimeTaskInterval * 10L,
+						configPlaytimeTaskInterval * 20L);
+			}
 		}
 
 		// Schedule a repeating task to monitor distances travelled by each player (not directly related to an event).
@@ -234,8 +246,12 @@ public class PluginLoader {
 				|| !disabledCategories.contains(NormalAchievements.DISTANCELLAMA)
 				|| !disabledCategories.contains(NormalAchievements.DISTANCESNEAKING)) {
 			int configDistanceTaskInterval = mainConfig.getInt("DistanceTaskInterval");
-			distanceTask = taskScheduler.runGlobalTimer(distanceRunnable, configDistanceTaskInterval * 40L,
-					configDistanceTaskInterval * 20L);
+			if (taskScheduler.isFolia()) {
+				perPlayerTasks.schedule(distanceRunnable::createPlayerTask, configDistanceTaskInterval * 20L);
+			} else {
+				distanceTask = taskScheduler.runGlobalTimer(distanceRunnable, configDistanceTaskInterval * 40L,
+						configDistanceTaskInterval * 20L);
+			}
 		}
 	}
 

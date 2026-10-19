@@ -39,7 +39,7 @@ public class DoctorCommand extends AbstractCommand {
 
 	@Inject
 	public DoctorCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			StringBuilder pluginHeader, AdvancedAchievements advancedAchievements,
+			StringBuffer pluginHeader, AdvancedAchievements advancedAchievements,
 			AbstractDatabaseManager databaseManager, AchievementMap achievementMap, Set<Category> disabledCategories,
 			TaskScheduler taskScheduler) {
 		super(mainConfig, langConfig, pluginHeader);

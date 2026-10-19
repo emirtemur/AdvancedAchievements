@@ -24,7 +24,7 @@ public class WeekCommand extends AbstractRankingCommand {
 
 	@Inject
 	public WeekCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			StringBuilder pluginHeader, TaskScheduler taskScheduler, Logger logger,
+			StringBuffer pluginHeader, TaskScheduler taskScheduler, Logger logger,
 			AbstractDatabaseManager databaseManager, SoundPlayer soundPlayer) {
 		super(mainConfig, langConfig, pluginHeader, taskScheduler, logger, "week-achievement", databaseManager,
 				soundPlayer);

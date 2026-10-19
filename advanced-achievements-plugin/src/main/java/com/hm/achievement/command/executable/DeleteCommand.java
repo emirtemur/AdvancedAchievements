@@ -37,7 +37,7 @@ public class DeleteCommand extends AbstractParsableCommand {
 
 	@Inject
 	public DeleteCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			StringBuilder pluginHeader, CacheManager cacheManager, AbstractDatabaseManager databaseManager,
+			StringBuffer pluginHeader, CacheManager cacheManager, AbstractDatabaseManager databaseManager,
 			AchievementMap achievementMap, TaskScheduler taskScheduler) {
 		super(mainConfig, langConfig, pluginHeader, taskScheduler);
 		this.cacheManager = cacheManager;

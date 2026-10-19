@@ -22,7 +22,7 @@ public abstract class AbstractParsableCommand extends AbstractCommand {
 	private String langPlayerOffline;
 	private String langEntityNotPlayer;
 
-	AbstractParsableCommand(YamlConfiguration mainConfig, YamlConfiguration langConfig, StringBuilder pluginHeader,
+	AbstractParsableCommand(YamlConfiguration mainConfig, YamlConfiguration langConfig, StringBuffer pluginHeader,
 			TaskScheduler taskScheduler) {
 		super(mainConfig, langConfig, pluginHeader);
 		this.taskScheduler = taskScheduler;

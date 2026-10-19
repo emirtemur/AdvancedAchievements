@@ -22,7 +22,6 @@ import com.hm.achievement.category.NormalAchievements;
 import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.CacheManager;
 import com.hm.achievement.lifecycle.Cleanable;
-import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.StatisticIncreaseHandler;
 
 /**
@@ -37,16 +36,14 @@ public class AchieveDistanceRunnable extends StatisticIncreaseHandler implements
 	// Concurrent map as teleport events and distance checks may run on different region threads with Folia.
 	private final Map<UUID, Location> playerLocations = new ConcurrentHashMap<>();
 	private final Set<Category> disabledCategories;
-	private final TaskScheduler taskScheduler;
 
 	private boolean configIgnoreVerticalDistance;
 
 	@Inject
 	public AchieveDistanceRunnable(@Named("main") YamlConfiguration mainConfig, AchievementMap achievementMap,
-			CacheManager cacheManager, Set<Category> disabledCategories, TaskScheduler taskScheduler) {
+			CacheManager cacheManager, Set<Category> disabledCategories) {
 		super(mainConfig, achievementMap, cacheManager);
 		this.disabledCategories = disabledCategories;
-		this.taskScheduler = taskScheduler;
 	}
 
 	@Override
@@ -63,9 +60,18 @@ public class AchieveDistanceRunnable extends StatisticIncreaseHandler implements
 
 	@Override
 	public void run() {
-		// With Folia, each player is processed on the region thread that owns them.
-		Bukkit.getOnlinePlayers()
-				.forEach(p -> taskScheduler.runOnEntityThread(p, () -> validateMovementAndUpdateDistance(p)));
+		Bukkit.getOnlinePlayers().forEach(this::validateMovementAndUpdateDistance);
+	}
+
+	/**
+	 * Creates a task monitoring the distances travelled by a single player. Used with Folia instead of {@link #run()},
+	 * so that each player is processed by the region thread owning them.
+	 *
+	 * @param player
+	 * @return the task to run periodically on the player's thread
+	 */
+	public Runnable createPlayerTask(Player player) {
+		return () -> validateMovementAndUpdateDistance(player);
 	}
 
 	public void updateLocation(UUID uuid, Location location) {

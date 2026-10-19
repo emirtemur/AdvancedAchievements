@@ -145,11 +145,46 @@ public class TaskScheduler {
 	 * @param task
 	 */
 	public void runOnEntityThread(Entity entity, Runnable task) {
+		runOnEntityThread(entity, task, null);
+	}
+
+	/**
+	 * Same as {@link #runOnEntityThread(Entity, Runnable)}, with a callback invoked instead of the task if the entity
+	 * is removed before the task could run with Folia. The callback must not interact with the entity's world.
+	 *
+	 * @param entity
+	 * @param task
+	 * @param retired
+	 */
+	public void runOnEntityThread(Entity entity, Runnable task, Runnable retired) {
 		if (folia ? Bukkit.isOwnedByCurrentRegion(entity) : Bukkit.isPrimaryThread()) {
 			task.run();
+		} else if (folia) {
+			if (entity.getScheduler().run(plugin, t -> task.run(), retired) == null && retired != null) {
+				// Entity already removed: the retired callback isn't invoked by Folia in this case.
+				retired.run();
+			}
 		} else {
-			runForEntity(entity, task);
+			Bukkit.getScheduler().runTask(plugin, task);
 		}
+	}
+
+	/**
+	 * Schedules a repeating task on the thread owning the entity. With Folia, the task stops when the entity is
+	 * removed.
+	 *
+	 * @param entity
+	 * @param task
+	 * @param delayTicks
+	 * @param periodTicks
+	 * @return the scheduled task
+	 */
+	public Task runForEntityTimer(Entity entity, Runnable task, long delayTicks, long periodTicks) {
+		if (folia) {
+			return wrap(entity.getScheduler().runAtFixedRate(plugin, t -> task.run(), null, atLeastOneTick(delayTicks),
+					atLeastOneTick(periodTicks)));
+		}
+		return wrap(Bukkit.getScheduler().runTaskTimer(plugin, task, delayTicks, periodTicks));
 	}
 
 	public void runForEntityLater(Entity entity, Runnable task, long delayTicks) {

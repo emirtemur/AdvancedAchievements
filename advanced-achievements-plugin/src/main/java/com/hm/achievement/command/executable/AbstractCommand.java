@@ -17,12 +17,12 @@ public abstract class AbstractCommand implements Reloadable {
 
 	final YamlConfiguration mainConfig;
 	final YamlConfiguration langConfig;
-	final StringBuilder pluginHeader;
+	final StringBuffer pluginHeader;
 
 	private String langNoPermissions;
 	private String langPlayerOnly;
 
-	AbstractCommand(YamlConfiguration mainConfig, YamlConfiguration langConfig, StringBuilder pluginHeader) {
+	AbstractCommand(YamlConfiguration mainConfig, YamlConfiguration langConfig, StringBuffer pluginHeader) {
 		this.mainConfig = mainConfig;
 		this.langConfig = langConfig;
 		this.pluginHeader = pluginHeader;

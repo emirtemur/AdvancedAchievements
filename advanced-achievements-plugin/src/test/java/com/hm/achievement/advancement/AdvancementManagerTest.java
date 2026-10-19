@@ -197,41 +197,80 @@ class AdvancementManagerTest {
 	}
 
 	@Test
-	void forceRegenerationOnFoliaShouldRemoveFilesAndDeferRegenerationToRestart() {
+	void forceRegenerationOnFoliaShouldReloadDataWhenSupported() {
 		NamespacedKey rootKey = key(AdvancementManager.ADVANCED_ACHIEVEMENTS_PARENT);
 		Advancement oldRoot = advancement(rootKey);
-		TaskScheduler foliaScheduler = mock(TaskScheduler.class);
-		when(foliaScheduler.isFolia()).thenReturn(true);
-		doAnswer(invocation -> {
-			invocation.getArgument(0, Runnable.class).run();
-			return null;
-		}).when(foliaScheduler).runOnGlobalThread(any());
+		when(guiItems.getOrderedAchievementItems()).thenReturn(Collections.emptyMap());
+		when(unsafeValues.loadAdvancement(eq(rootKey), anyString())).thenReturn(mock(Advancement.class));
 		ArgumentCaptor<Runnable> scheduled = ArgumentCaptor.forClass(Runnable.class);
 		TaskScheduler.Task task = mock(TaskScheduler.Task.class);
-		when(foliaScheduler.runGlobalTimer(scheduled.capture(), eq(1L), eq(1L))).thenReturn(task);
-		AdvancementManager foliaManager = new AdvancementManager(mainConfig, guiItems, achievementMap, plugin, logger,
-				Set.of(), foliaScheduler);
-		foliaManager.extractConfigurationParameters();
+		AdvancementManager foliaManager = foliaManager(scheduled, task);
 		Runnable complete = mock(Runnable.class);
 
 		try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
 			bukkit.when(Bukkit::getUnsafe).thenReturn(unsafeValues);
-			bukkit.when(Bukkit::advancementIterator).thenReturn(java.util.List.of(oldRoot).iterator());
+			bukkit.when(Bukkit::getMinecraftVersion).thenReturn("1.21.1");
+			bukkit.when(Bukkit::getOnlinePlayers).thenReturn(Collections.emptyList());
+			bukkit.when(Bukkit::advancementIterator).thenReturn(java.util.List.of(oldRoot).iterator(),
+					Collections.emptyIterator());
 
 			foliaManager.generateAdvancementsIncremental(true, feedback, complete);
 			Runnable tick = scheduled.getValue();
 			tick.run();
 			tick.run();
+			tick.run();
 
-			bukkit.verify(Bukkit::reloadData, never());
+			bukkit.verify(Bukkit::reloadData);
+		}
+
+		verify(unsafeValues).loadAdvancement(eq(rootKey), anyString());
+		verify(task).cancel();
+		verify(complete).run();
+	}
+
+	@Test
+	void forceRegenerationOnFoliaShouldDeferToRestartWhenDataReloadIsUnsupported() {
+		NamespacedKey rootKey = key(AdvancementManager.ADVANCED_ACHIEVEMENTS_PARENT);
+		Advancement oldRoot = advancement(rootKey);
+		when(guiItems.getOrderedAchievementItems()).thenReturn(Collections.emptyMap());
+		ArgumentCaptor<Runnable> scheduled = ArgumentCaptor.forClass(Runnable.class);
+		TaskScheduler.Task task = mock(TaskScheduler.Task.class);
+		AdvancementManager foliaManager = foliaManager(scheduled, task);
+		Runnable complete = mock(Runnable.class);
+
+		try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+			bukkit.when(Bukkit::getUnsafe).thenReturn(unsafeValues);
+			bukkit.when(Bukkit::getMinecraftVersion).thenReturn("1.21.1");
+			bukkit.when(Bukkit::advancementIterator).thenReturn(java.util.List.of(oldRoot).iterator());
+			bukkit.when(Bukkit::reloadData).thenThrow(new UnsupportedOperationException("Not supported on Folia"));
+
+			foliaManager.generateAdvancementsIncremental(true, feedback, complete);
+			Runnable tick = scheduled.getValue();
+			tick.run();
+			tick.run();
+			tick.run();
 		}
 
 		verify(unsafeValues).removeAdvancement(rootKey);
 		verify(unsafeValues, never()).loadAdvancement(any(), anyString());
 		verify(task).cancel();
 		verify(complete, never()).run();
-		verify(feedback).sendMessage("§eOld advancements were removed. Restart the server to regenerate them, as Folia "
-				+ "cannot reload server data at runtime.");
+		verify(feedback).sendMessage("§eOld advancements were removed. Restart the server to regenerate them, as this "
+				+ "server cannot reload its data at runtime.");
+	}
+
+	private AdvancementManager foliaManager(ArgumentCaptor<Runnable> scheduled, TaskScheduler.Task task) {
+		TaskScheduler foliaScheduler = mock(TaskScheduler.class);
+		when(foliaScheduler.isFolia()).thenReturn(true);
+		doAnswer(invocation -> {
+			invocation.getArgument(0, Runnable.class).run();
+			return null;
+		}).when(foliaScheduler).runOnGlobalThread(any());
+		when(foliaScheduler.runGlobalTimer(scheduled.capture(), eq(1L), eq(1L))).thenReturn(task);
+		AdvancementManager foliaManager = new AdvancementManager(mainConfig, guiItems, achievementMap, plugin, logger,
+				Set.of(), foliaScheduler);
+		foliaManager.extractConfigurationParameters();
+		return foliaManager;
 	}
 
 	private ArgumentCaptor<Runnable> scheduledTaskCaptor() {

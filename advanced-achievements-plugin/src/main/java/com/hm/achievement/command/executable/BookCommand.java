@@ -65,7 +65,7 @@ public class BookCommand extends AbstractCommand implements Cleanable {
 
 	@Inject
 	public BookCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			StringBuilder pluginHeader, TaskScheduler taskScheduler, Logger logger,
+			StringBuffer pluginHeader, TaskScheduler taskScheduler, Logger logger,
 			AbstractDatabaseManager databaseManager, SoundPlayer soundPlayer, AchievementMap achievementMap) {
 		super(mainConfig, langConfig, pluginHeader);
 		this.taskScheduler = taskScheduler;

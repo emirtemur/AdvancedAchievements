@@ -40,7 +40,7 @@ public class GiveCommand extends AbstractParsableCommand {
 
 	@Inject
 	public GiveCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			StringBuilder pluginHeader, CacheManager cacheManager, AchievementMap achievementMap,
+			StringBuffer pluginHeader, CacheManager cacheManager, AchievementMap achievementMap,
 			PlayerAdvancedAchievementListener playerAdvancedAchievementListener, TaskScheduler taskScheduler) {
 		super(mainConfig, langConfig, pluginHeader, taskScheduler);
 		this.cacheManager = cacheManager;

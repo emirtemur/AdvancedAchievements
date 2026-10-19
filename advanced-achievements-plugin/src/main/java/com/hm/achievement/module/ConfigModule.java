@@ -9,6 +9,7 @@ import javax.inject.Singleton;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import com.hm.achievement.category.Category;
+import com.hm.achievement.config.SnapshotYamlConfiguration;
 
 import dagger.Module;
 import dagger.Provides;
@@ -25,29 +26,31 @@ public class ConfigModule {
 
 	@Provides
 	@Singleton
-	StringBuilder providePluginHeader() {
-		return new StringBuilder();
+	StringBuffer providePluginHeader() {
+		// Synchronised buffer, as the header is read by several region threads with Folia while a reload replaces it.
+		return new StringBuffer();
 	}
 
+	// Configurations are replaced as a whole on reload, as they are read by several region threads with Folia.
 	@Provides
 	@Singleton
 	@Named("main")
 	YamlConfiguration providesMainConfig() {
-		return new YamlConfiguration();
+		return new SnapshotYamlConfiguration();
 	}
 
 	@Provides
 	@Singleton
 	@Named("lang")
 	YamlConfiguration providesLangConfig() {
-		return new YamlConfiguration();
+		return new SnapshotYamlConfiguration();
 	}
 
 	@Provides
 	@Singleton
 	@Named("gui")
 	YamlConfiguration providesGuiConfig() {
-		return new YamlConfiguration();
+		return new SnapshotYamlConfiguration();
 	}
 
 }

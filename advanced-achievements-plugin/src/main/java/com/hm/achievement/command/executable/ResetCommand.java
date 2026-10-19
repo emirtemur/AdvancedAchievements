@@ -38,7 +38,7 @@ public class ResetCommand extends AbstractParsableCommand {
 
 	@Inject
 	public ResetCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			StringBuilder pluginHeader, CacheManager cacheManager, AchievementMap achievementMap,
+			StringBuffer pluginHeader, CacheManager cacheManager, AchievementMap achievementMap,
 			TaskScheduler taskScheduler) {
 		super(mainConfig, langConfig, pluginHeader, taskScheduler);
 		this.cacheManager = cacheManager;

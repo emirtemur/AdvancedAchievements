@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -89,7 +90,7 @@ public class PlayerAdvancedAchievementListener implements Listener, Reloadable {
 	private final YamlConfiguration mainConfig;
 	private final YamlConfiguration langConfig;
 	private final Logger logger;
-	private final StringBuilder pluginHeader;
+	private final StringBuffer pluginHeader;
 	private final CacheManager cacheManager;
 	private final AdvancedAchievements advancedAchievements;
 	private final RewardParser rewardParser;
@@ -119,7 +120,7 @@ public class PlayerAdvancedAchievementListener implements Listener, Reloadable {
 
 	@Inject
 	public PlayerAdvancedAchievementListener(@Named("main") YamlConfiguration mainConfig,
-			@Named("lang") YamlConfiguration langConfig, Logger logger, StringBuilder pluginHeader,
+			@Named("lang") YamlConfiguration langConfig, Logger logger, StringBuffer pluginHeader,
 			CacheManager cacheManager, AdvancedAchievements advancedAchievements, RewardParser rewardParser,
 			AchievementMap achievementMap, AbstractDatabaseManager databaseManager, ToggleCommand toggleCommand,
 			FancyMessageSender fancyMessageSender, TaskScheduler taskScheduler) {
@@ -182,7 +183,28 @@ public class PlayerAdvancedAchievementListener implements Listener, Reloadable {
 	 * @param achievement
 	 */
 	public void awardAchievement(Player player, Achievement achievement) {
-		taskScheduler.runOnEntityThread(player, () -> awardAchievementOnOwningThread(player, achievement));
+		UUID uuid = player.getUniqueId();
+		String playerName = player.getName();
+		taskScheduler.runOnEntityThread(player, () -> awardAchievementOnOwningThread(player, achievement),
+				() -> taskScheduler.runAsync(() -> recordAchievementOfRemovedPlayer(uuid, playerName, achievement)));
+	}
+
+	/**
+	 * Records an achievement whose award couldn't be processed because the player was removed in the meantime (Folia
+	 * only). Rewards and notifications require the player, so only the achievement itself is persisted.
+	 *
+	 * @param uuid
+	 * @param playerName
+	 * @param achievement
+	 */
+	private void recordAchievementOfRemovedPlayer(UUID uuid, String playerName, Achievement achievement) {
+		if (cacheManager.hasPlayerAchievement(uuid, achievement.getName())) {
+			return;
+		}
+		databaseManager.registerAchievement(uuid, achievement.getName(), System.currentTimeMillis());
+		cacheManager.registerNewlyReceivedAchievement(uuid, achievement.getName());
+		logger.warning("Player " + playerName + " disconnected before receiving the achievement "
+				+ achievement.getDisplayName() + "; it was recorded without rewards.");
 	}
 
 	private void awardAchievementOnOwningThread(Player player, Achievement achievement) {

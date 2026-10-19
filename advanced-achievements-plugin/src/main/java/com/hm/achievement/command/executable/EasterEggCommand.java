@@ -19,7 +19,7 @@ public class EasterEggCommand extends AbstractCommand {
 
 	@Inject
 	public EasterEggCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			StringBuilder pluginHeader) {
+			StringBuffer pluginHeader) {
 		super(mainConfig, langConfig, pluginHeader);
 	}
 

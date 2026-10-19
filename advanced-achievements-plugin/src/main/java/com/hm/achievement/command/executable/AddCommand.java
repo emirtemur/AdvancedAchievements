@@ -45,7 +45,7 @@ public class AddCommand extends AbstractParsableCommand {
 
 	@Inject
 	public AddCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			StringBuilder pluginHeader, AbstractDatabaseManager databaseManager, CacheManager cacheManager,
+			StringBuffer pluginHeader, AbstractDatabaseManager databaseManager, CacheManager cacheManager,
 			StatisticIncreaseHandler statisticIncreaseHandler, AchievementMap achievementMap,
 			TaskScheduler taskScheduler) {
 		super(mainConfig, langConfig, pluginHeader, taskScheduler);

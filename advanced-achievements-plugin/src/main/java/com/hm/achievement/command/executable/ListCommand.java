@@ -38,7 +38,7 @@ public class ListCommand extends AbstractCommand {
 
 	@Inject
 	public ListCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			StringBuilder pluginHeader, MainGUI mainGUI, CategoryGUI categoryGUI, GUIItems guiItems) {
+			StringBuffer pluginHeader, MainGUI mainGUI, CategoryGUI categoryGUI, GUIItems guiItems) {
 		super(mainConfig, langConfig, pluginHeader);
 		this.mainGUI = mainGUI;
 		this.categoryGUI = categoryGUI;

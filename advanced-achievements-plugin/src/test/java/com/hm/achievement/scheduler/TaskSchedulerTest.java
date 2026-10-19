@@ -125,6 +125,16 @@ class TaskSchedulerTest {
 		}
 
 		@Test
+		void shouldUseBukkitTimerForEntityTimers() {
+			Player player = mock(Player.class);
+
+			underTest.runForEntityTimer(player, task, 1L, 200L);
+
+			verify(scheduler).runTaskTimer(plugin, task, 1L, 200L);
+			verify(player, never()).getScheduler();
+		}
+
+		@Test
 		void shouldCancelUnderlyingBukkitTask() {
 			BukkitTask bukkitTask = mock(BukkitTask.class);
 			when(scheduler.runTaskTimer(plugin, task, 1L, 1L)).thenReturn(bukkitTask);
@@ -254,6 +264,40 @@ class TaskSchedulerTest {
 			underTest.runGlobalTimer(task, 1L, 1L).cancel();
 
 			verify(scheduledTask).cancel();
+		}
+
+		@Test
+		void shouldRunRepeatingEntityTasksOnEntityScheduler() {
+			ScheduledTask scheduledTask = mock(ScheduledTask.class);
+			when(entityScheduler.runAtFixedRate(eq(plugin), any(), isNull(), eq(1L), eq(200L))).thenReturn(scheduledTask);
+
+			underTest.runForEntityTimer(player, task, 0L, 200L).cancel();
+
+			verify(scheduledTask).cancel();
+		}
+
+		@Test
+		void shouldPassRetiredCallbackToEntityScheduler() {
+			Runnable retired = mock(Runnable.class);
+			bukkit.when(() -> Bukkit.isOwnedByCurrentRegion(player)).thenReturn(false);
+			when(entityScheduler.run(eq(plugin), any(), eq(retired))).thenReturn(mock(ScheduledTask.class));
+
+			underTest.runOnEntityThread(player, task, retired);
+
+			verify(entityScheduler).run(eq(plugin), any(), eq(retired));
+			verify(retired, never()).run();
+		}
+
+		@Test
+		void shouldInvokeRetiredCallbackWhenEntityAlreadyRemoved() {
+			Runnable retired = mock(Runnable.class);
+			bukkit.when(() -> Bukkit.isOwnedByCurrentRegion(player)).thenReturn(false);
+			when(entityScheduler.run(eq(plugin), any(), eq(retired))).thenReturn(null);
+
+			underTest.runOnEntityThread(player, task, retired);
+
+			verify(retired).run();
+			verify(task, never()).run();
 		}
 
 		@Test

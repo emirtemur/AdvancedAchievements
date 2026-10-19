@@ -38,7 +38,7 @@ public class ReloadCommand extends AbstractCommand {
 
 	@Inject
 	public ReloadCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			StringBuilder pluginHeader, Logger logger, Lazy<PluginLoader> pluginLoader,
+			StringBuffer pluginHeader, Logger logger, Lazy<PluginLoader> pluginLoader,
 			Lazy<Set<Reloadable>> reloadables, TaskScheduler taskScheduler) {
 		super(mainConfig, langConfig, pluginHeader);
 		this.logger = logger;

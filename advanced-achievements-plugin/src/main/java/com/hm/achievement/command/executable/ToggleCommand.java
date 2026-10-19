@@ -35,7 +35,7 @@ public class ToggleCommand extends AbstractCommand {
 
 	@Inject
 	public ToggleCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			StringBuilder pluginHeader) {
+			StringBuffer pluginHeader) {
 		super(mainConfig, langConfig, pluginHeader);
 	}
 

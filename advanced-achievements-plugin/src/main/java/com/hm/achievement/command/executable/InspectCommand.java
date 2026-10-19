@@ -54,7 +54,7 @@ public class InspectCommand extends AbstractCommand {
 
 	@Inject
 	public InspectCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			StringBuilder pluginHeader, AdvancedAchievements advancedAchievements, AbstractDatabaseManager databaseManager,
+			StringBuffer pluginHeader, AdvancedAchievements advancedAchievements, AbstractDatabaseManager databaseManager,
 			AchievementMap achievementMap, TaskScheduler taskScheduler) {
 		super(mainConfig, langConfig, pluginHeader);
 		this.advancedAchievements = advancedAchievements;

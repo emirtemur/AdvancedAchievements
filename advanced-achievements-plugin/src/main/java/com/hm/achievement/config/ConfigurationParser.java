@@ -55,7 +55,7 @@ public class ConfigurationParser {
 	private final YamlConfiguration guiConfig;
 	private final AchievementMap achievementMap;
 	private final Set<Category> disabledCategories;
-	private final StringBuilder pluginHeader;
+	private final StringBuffer pluginHeader;
 	private final Logger logger;
 	private final YamlUpdater yamlUpdater;
 	private final AdvancedAchievements plugin;
@@ -64,7 +64,7 @@ public class ConfigurationParser {
 	@Inject
 	public ConfigurationParser(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
 			@Named("gui") YamlConfiguration guiConfig, AchievementMap achievementMap, Set<Category> disabledCategories,
-			StringBuilder pluginHeader, Logger logger, YamlUpdater yamlUpdater,
+			StringBuffer pluginHeader, Logger logger, YamlUpdater yamlUpdater,
 			AdvancedAchievements plugin, RewardParser rewardParser) {
 		this.mainConfig = mainConfig;
 		this.langConfig = langConfig;
@@ -249,8 +249,8 @@ public class ConfigurationParser {
 		achievementMap.replaceWith(parsedAchievementMap);
 		disabledCategories.clear();
 		disabledCategories.addAll(parsedDisabledCategories);
-		pluginHeader.setLength(0);
-		pluginHeader.append(parsedPluginHeader);
+		// Single synchronised operation, so that concurrent readers never observe a partially replaced header.
+		pluginHeader.replace(0, pluginHeader.length(), parsedPluginHeader.toString());
 		pluginHeader.trimToSize();
 	}
 

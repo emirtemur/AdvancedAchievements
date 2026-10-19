@@ -49,7 +49,7 @@ class TopCommandTest {
 		langConfig.set("top-achievement", "Top achievers:");
 		langConfig.set("player-rank", "Rank:");
 		langConfig.set("not-ranked", "Not ranked.");
-		underTest = new TopCommand(mainConfig, langConfig, new StringBuilder(HEADER), taskScheduler,
+		underTest = new TopCommand(mainConfig, langConfig, new StringBuffer(HEADER), taskScheduler,
 				Logger.getAnonymousLogger(), databaseManager, mock(SoundPlayer.class));
 		underTest.extractConfigurationParameters();
 	}

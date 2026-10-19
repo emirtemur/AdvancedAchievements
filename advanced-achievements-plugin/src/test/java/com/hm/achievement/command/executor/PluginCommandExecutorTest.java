@@ -56,7 +56,7 @@ class PluginCommandExecutorTest {
 		commands.add(helpCommand);
 		commands.add(listCommand);
 		commands.add(argsCommand);
-		StringBuilder pluginHeader = new StringBuilder(PLUGIN_HEADER);
+		StringBuffer pluginHeader = new StringBuffer(PLUGIN_HEADER);
 		underTest = new PluginCommandExecutor(langConfig, commands, pluginHeader);
 		underTest.extractConfigurationParameters();
 	}
