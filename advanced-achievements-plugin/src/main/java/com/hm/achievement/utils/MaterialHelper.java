@@ -50,13 +50,12 @@ public class MaterialHelper {
 			logger.warning(usageLocation + " is missing. Please check your configuration.");
 			return defaultMaterial;
 		}
+		// Legacy (pre-1.13) names are deliberately not matched: looking them up makes the server load its legacy material
+		// support, which stalls it for several seconds.
 		Material material = Material.matchMaterial(name);
 		if (material == null) {
-			material = Material.matchMaterial(name, true);
-		}
-		if (material == null) {
-			logger.warning("Material \"" + name + "\" used in " + usageLocation
-					+ " is invalid. Have you spelt the name correctly and is it available for your Minecraft version?");
+			logger.warning("Material \"" + name + "\" used in " + usageLocation + " is invalid. Have you spelt the name "
+					+ "correctly, is it available for your Minecraft version and is it a modern (1.13+) material name?");
 			material = defaultMaterial;
 		}
 		return material;

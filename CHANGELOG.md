@@ -15,6 +15,7 @@
 - Reloading publishes configurations, the plugin header, achievements and GUI items atomically instead of clearing and refilling them in place.
 - Achievements are still recorded if a player disconnects before a deferred award could be processed.
 - A null teleport destination no longer breaks distance tracking.
+- The default `gui.yml` uses `dirt_path` instead of the legacy `grass_path`, and legacy material names are no longer looked up, as doing so stalls the server for several seconds while it loads legacy material support.
 
 ## 12.0
 
