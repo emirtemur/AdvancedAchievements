@@ -10,6 +10,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
 import com.hm.achievement.db.CacheManager;
+import com.hm.achievement.scheduler.TaskScheduler;
 
 /**
  * Class in charge of handling the /aach check command, which checks whether a player has received an achievement.
@@ -27,8 +28,8 @@ public class CheckCommand extends AbstractParsableCommand {
 
 	@Inject
 	public CheckCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			StringBuilder pluginHeader, CacheManager cacheManager) {
-		super(mainConfig, langConfig, pluginHeader);
+			StringBuilder pluginHeader, CacheManager cacheManager, TaskScheduler taskScheduler) {
+		super(mainConfig, langConfig, pluginHeader, taskScheduler);
 		this.cacheManager = cacheManager;
 	}
 

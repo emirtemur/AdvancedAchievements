@@ -16,6 +16,7 @@ import com.hm.achievement.module.CommandModule;
 import com.hm.achievement.module.ConfigModule;
 import com.hm.achievement.module.DatabaseModule;
 import com.hm.achievement.module.ReloadableModule;
+import com.hm.achievement.scheduler.TaskScheduler;
 
 import dagger.BindsInstance;
 import dagger.Component;
@@ -52,9 +53,8 @@ public class AdvancedAchievements extends JavaPlugin {
 
 		var advancementManager = advancedAchievementsComponent.advancementManager();
 
-		Bukkit.getScheduler().runTaskLater(this, () -> {
-			advancementManager.generateAdvancementsIncremental(false, null, null);
-		}, 1L);
+		advancedAchievementsComponent.taskScheduler()
+				.runGlobalLater(() -> advancementManager.generateAdvancementsIncremental(false, null, null), 1L);
 
 		getLogger().info(
 				"Plugin has finished loading and is ready to run! Took " + (System.currentTimeMillis() - startTime) + "ms.");
@@ -79,6 +79,8 @@ interface AdvancedAchievementsComponent {
 	PluginLoader pluginLoader();
 
 	AdvancementManager advancementManager();
+
+	TaskScheduler taskScheduler();
 
 	@Component.Builder
 	interface Builder {

@@ -36,18 +36,19 @@ import com.hm.achievement.utils.StringHelper;
 @Singleton
 public class GUIItems implements Reloadable {
 
-	private final Map<OrderedCategory, ItemStack> orderedAchievementItems = new TreeMap<>();
+	// Maps are rebuilt on reload and published as a whole, as GUIs may be opened by several region threads with Folia.
+	private volatile Map<OrderedCategory, ItemStack> orderedAchievementItems = Collections.emptyMap();
 
 	// Various other item stacks displayed in the GUI.
 	private ItemStack previousButton;
 	private ItemStack nextButton;
 	private ItemStack backButton;
 	private ItemStack achievementNotStartedDefault;
-	private final Map<String, ItemStack> achievementNotStarted = new HashMap<>();
+	private volatile Map<String, ItemStack> achievementNotStarted = Collections.emptyMap();
 	private ItemStack achievementStartedDefault;
-	private final Map<String, ItemStack> achievementStarted = new HashMap<>();
+	private volatile Map<String, ItemStack> achievementStarted = Collections.emptyMap();
 	private ItemStack achievementReceivedDefault;
-	private final Map<String, ItemStack> achievementReceived = new HashMap<>();
+	private volatile Map<String, ItemStack> achievementReceived = Collections.emptyMap();
 	private ItemStack achievementLock;
 	private ItemStack categoryLock;
 
@@ -73,7 +74,7 @@ public class GUIItems implements Reloadable {
 		configListAchievementFormat = "&8" + mainConfig.getString("ListAchievementFormat");
 		configIcon = StringEscapeUtils.unescapeJava(mainConfig.getString("Icon"));
 
-		orderedAchievementItems.clear();
+		Map<OrderedCategory, ItemStack> orderedAchievementItems = new TreeMap<>();
 		// getKeys returns a LinkedHashSet, preserving the ordering specified in the file.
 		List<String> orderedCategories = new ArrayList<>(guiConfig.getKeys(false));
 		// Prepare item stacks displayed in the GUI for Multiple achievements.
@@ -101,6 +102,11 @@ public class GUIItems implements Reloadable {
 		buildItemLore(itemStack, categoryName);
 		orderedAchievementItems.put(new OrderedCategory(orderedCategories.indexOf(categoryName),
 				CommandAchievements.COMMANDS), itemStack);
+		this.orderedAchievementItems = Collections.unmodifiableMap(orderedAchievementItems);
+
+		Map<String, ItemStack> achievementNotStarted = new HashMap<>();
+		Map<String, ItemStack> achievementStarted = new HashMap<>();
+		Map<String, ItemStack> achievementReceived = new HashMap<>();
 
 		achievementNotStartedDefault = loadAchievementItems("AchievementNotStarted", Material.RED_TERRACOTTA,
 				achievementNotStarted);
@@ -108,6 +114,9 @@ public class GUIItems implements Reloadable {
 				achievementStarted);
 		achievementReceivedDefault = loadAchievementItems("AchievementReceived", Material.LIME_TERRACOTTA,
 				achievementReceived);
+		this.achievementNotStarted = achievementNotStarted;
+		this.achievementStarted = achievementStarted;
+		this.achievementReceived = achievementReceived;
 		previousButton = createButton("PreviousButton", "list-previous-message", "list-previous-lore");
 		nextButton = createButton("NextButton", "list-next-message", "list-next-lore");
 		backButton = createButton("BackButton", "list-back-message", "list-back-lore");
@@ -116,7 +125,6 @@ public class GUIItems implements Reloadable {
 	}
 
 	private ItemStack loadAchievementItems(String sectionPath, Material defaultMaterial, Map<String, ItemStack> items) {
-		items.clear();
 		ItemStack defaultItem = guiConfig.isString(sectionPath + ".Item") ? createItemStack(sectionPath)
 				: new ItemStack(defaultMaterial, 1);
 		ConfigurationSection section = guiConfig.getConfigurationSection(sectionPath);

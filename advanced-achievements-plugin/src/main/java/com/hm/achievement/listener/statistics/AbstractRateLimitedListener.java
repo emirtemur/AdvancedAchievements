@@ -1,22 +1,21 @@
 package com.hm.achievement.listener.statistics;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.commons.lang3.StringUtils;
-import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
-import com.hm.achievement.AdvancedAchievements;
 import com.hm.achievement.category.Category;
 import com.hm.achievement.category.NormalAchievements;
 import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.CacheManager;
 import com.hm.achievement.domain.Achievement;
 import com.hm.achievement.lifecycle.Cleanable;
+import com.hm.achievement.scheduler.TaskScheduler;
 
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
@@ -28,8 +27,9 @@ import net.md_5.bungee.api.chat.TextComponent;
  */
 public class AbstractRateLimitedListener extends AbstractListener implements Cleanable {
 
-	private final Map<Integer, Map<UUID, Long>> slotsToPlayersLastActionTimes = new HashMap<>();
-	private final AdvancedAchievements advancedAchievements;
+	// Concurrent maps as events may be handled by several region threads with Folia.
+	private final Map<Integer, Map<UUID, Long>> slotsToPlayersLastActionTimes = new ConcurrentHashMap<>();
+	private final TaskScheduler taskScheduler;
 	private final YamlConfiguration langConfig;
 
 	private int categoryCooldown;
@@ -39,9 +39,9 @@ public class AbstractRateLimitedListener extends AbstractListener implements Cle
 	private String langStatisticCooldown;
 
 	AbstractRateLimitedListener(Category category, YamlConfiguration mainConfig, AchievementMap achievementMap,
-			CacheManager cacheManager, AdvancedAchievements advancedAchievements, YamlConfiguration langConfig) {
+			CacheManager cacheManager, TaskScheduler taskScheduler, YamlConfiguration langConfig) {
 		super(category, mainConfig, achievementMap, cacheManager);
-		this.advancedAchievements = advancedAchievements;
+		this.taskScheduler = taskScheduler;
 		this.langConfig = langConfig;
 	}
 
@@ -97,15 +97,15 @@ public class AbstractRateLimitedListener extends AbstractListener implements Cle
 			return false;
 		}
 
-		Map<UUID, Long> playersLastActionTimes = slotsToPlayersLastActionTimes.computeIfAbsent(slotNumber, HashMap::new);
+		Map<UUID, Long> playersLastActionTimes = slotsToPlayersLastActionTimes.computeIfAbsent(slotNumber,
+				k -> new ConcurrentHashMap<>());
 		long currentTimeMillis = System.currentTimeMillis();
 		long timeToWait = playersLastActionTimes.getOrDefault(uuid, 0L) + categoryCooldown - currentTimeMillis;
 		if (timeToWait > 0) {
 			if (configCooldownActionBar) {
 				if (category == NormalAchievements.MUSICDISCS) {
 					// Display message with a delay to avoid it being overwritten by disc name message.
-					Bukkit.getScheduler().scheduleSyncDelayedTask(advancedAchievements,
-							() -> displayActionBarMessage(player, timeToWait), 20);
+					taskScheduler.runForEntityLater(player, () -> displayActionBarMessage(player, timeToWait), 20);
 				} else {
 					displayActionBarMessage(player, timeToWait);
 				}

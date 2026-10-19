@@ -1,7 +1,9 @@
 package com.hm.achievement.advancement;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -43,6 +45,7 @@ import com.hm.achievement.domain.Achievement;
 import com.hm.achievement.domain.Achievement.AchievementBuilder;
 import com.hm.achievement.gui.GUIItems;
 import com.hm.achievement.gui.OrderedCategory;
+import com.hm.achievement.scheduler.TaskScheduler;
 
 @ExtendWith(MockitoExtension.class)
 class AdvancementManagerTest {
@@ -77,7 +80,8 @@ class AdvancementManagerTest {
 		mainConfig.set("AdvancementGenerationPerTick", 1);
 		achievementMap = new AchievementMap();
 		when(plugin.getName()).thenReturn("AdvancedAchievements");
-		underTest = new AdvancementManager(mainConfig, guiItems, achievementMap, plugin, logger, Set.of());
+		underTest = new AdvancementManager(mainConfig, guiItems, achievementMap, plugin, logger, Set.of(),
+				new TaskScheduler(plugin, false));
 		underTest.extractConfigurationParameters();
 	}
 
@@ -192,6 +196,44 @@ class AdvancementManagerTest {
 		verify(scheduler, times(2)).runTaskTimer(eq(plugin), scheduled.capture(), eq(1L), eq(1L));
 	}
 
+	@Test
+	void forceRegenerationOnFoliaShouldRemoveFilesAndDeferRegenerationToRestart() {
+		NamespacedKey rootKey = key(AdvancementManager.ADVANCED_ACHIEVEMENTS_PARENT);
+		Advancement oldRoot = advancement(rootKey);
+		TaskScheduler foliaScheduler = mock(TaskScheduler.class);
+		when(foliaScheduler.isFolia()).thenReturn(true);
+		doAnswer(invocation -> {
+			invocation.getArgument(0, Runnable.class).run();
+			return null;
+		}).when(foliaScheduler).runOnGlobalThread(any());
+		ArgumentCaptor<Runnable> scheduled = ArgumentCaptor.forClass(Runnable.class);
+		TaskScheduler.Task task = mock(TaskScheduler.Task.class);
+		when(foliaScheduler.runGlobalTimer(scheduled.capture(), eq(1L), eq(1L))).thenReturn(task);
+		AdvancementManager foliaManager = new AdvancementManager(mainConfig, guiItems, achievementMap, plugin, logger,
+				Set.of(), foliaScheduler);
+		foliaManager.extractConfigurationParameters();
+		Runnable complete = mock(Runnable.class);
+
+		try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+			bukkit.when(Bukkit::getUnsafe).thenReturn(unsafeValues);
+			bukkit.when(Bukkit::advancementIterator).thenReturn(java.util.List.of(oldRoot).iterator());
+
+			foliaManager.generateAdvancementsIncremental(true, feedback, complete);
+			Runnable tick = scheduled.getValue();
+			tick.run();
+			tick.run();
+
+			bukkit.verify(Bukkit::reloadData, never());
+		}
+
+		verify(unsafeValues).removeAdvancement(rootKey);
+		verify(unsafeValues, never()).loadAdvancement(any(), anyString());
+		verify(task).cancel();
+		verify(complete, never()).run();
+		verify(feedback).sendMessage("§eOld advancements were removed. Restart the server to regenerate them, as Folia "
+				+ "cannot reload server data at runtime.");
+	}
+
 	private ArgumentCaptor<Runnable> scheduledTaskCaptor() {
 		ArgumentCaptor<Runnable> scheduled = ArgumentCaptor.forClass(Runnable.class);
 		when(scheduler.runTaskTimer(eq(plugin), scheduled.capture(), eq(1L), eq(1L))).thenReturn(generationTask);
@@ -200,6 +242,7 @@ class AdvancementManagerTest {
 
 	private void configureBukkit(MockedStatic<Bukkit> bukkit) {
 		bukkit.when(Bukkit::getUnsafe).thenReturn(unsafeValues);
+		bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
 		bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
 		bukkit.when(Bukkit::getOnlinePlayers).thenReturn(Collections.emptyList());
 		bukkit.when(Bukkit::getMinecraftVersion).thenReturn("1.21.1");

@@ -8,12 +8,12 @@ package com.hm.achievement.db;
  */
 public class CachedStatistic {
 
-	// Value of the statistic. Can only be modified by the main server thread.
+	// Value of the statistic. Guarded by this object's monitor, as Folia may update it from several region threads.
 	private long value;
 	private long revision;
 	private long persistedRevision;
 	// Indicates whether the player linked to this statistic has recently disconnected. Can only be modified by the main
-	// server thread.
+	// server thread (global region thread with Folia).
 	private volatile boolean disconnection;
 
 	public CachedStatistic(long value, boolean databaseConsistent) {
@@ -30,6 +30,18 @@ public class CachedStatistic {
 	public synchronized void setValue(long value) {
 		this.value = value;
 		revision++;
+	}
+
+	/**
+	 * Atomically adds a delta to the statistic.
+	 *
+	 * @param delta
+	 * @return the updated value
+	 */
+	public synchronized long increment(long delta) {
+		value += delta;
+		revision++;
+		return value;
 	}
 
 	public synchronized boolean isDatabaseConsistent() {

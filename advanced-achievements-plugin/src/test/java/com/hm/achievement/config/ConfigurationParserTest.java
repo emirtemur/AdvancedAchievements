@@ -37,6 +37,7 @@ import com.hm.achievement.category.NormalAchievements;
 import com.hm.achievement.domain.Achievement;
 import com.hm.achievement.domain.Achievement.AchievementBuilder;
 import com.hm.achievement.exception.PluginLoadError;
+import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.ColorHelper;
 import com.hm.achievement.utils.MaterialHelper;
 
@@ -92,7 +93,8 @@ class ConfigurationParserTest {
 		YamlConfiguration guiConfig = new YamlConfiguration();
 		AchievementMap achievementMap = new AchievementMap();
 		Set<Category> disabledCategories = new HashSet<>();
-		RewardParser rewardParser = new RewardParser(mainConfig, langConfig, plugin, materialHelper);
+		RewardParser rewardParser = new RewardParser(mainConfig, langConfig, plugin, materialHelper,
+				new TaskScheduler(plugin, false));
 		ConfigurationParser underTest = new ConfigurationParser(mainConfig, langConfig, guiConfig, achievementMap,
 				disabledCategories, new StringBuilder(), Logger.getAnonymousLogger(), new YamlUpdater(plugin), plugin,
 				rewardParser);
@@ -141,7 +143,8 @@ class ConfigurationParserTest {
 		YamlConfiguration mainConfig = new YamlConfiguration();
 		YamlConfiguration langConfig = new YamlConfiguration();
 		StringBuilder header = new StringBuilder();
-		RewardParser rewardParser = new RewardParser(mainConfig, langConfig, plugin, materialHelper);
+		RewardParser rewardParser = new RewardParser(mainConfig, langConfig, plugin, materialHelper,
+				new TaskScheduler(plugin, false));
 		ConfigurationParser underTest = new ConfigurationParser(mainConfig, langConfig, new YamlConfiguration(),
 				new AchievementMap(), new HashSet<>(), header, Logger.getAnonymousLogger(),
 				new YamlUpdater(plugin), plugin, rewardParser);
@@ -185,7 +188,8 @@ class ConfigurationParserTest {
 		YamlConfiguration mainConfig = new YamlConfiguration();
 		YamlConfiguration langConfig = new YamlConfiguration();
 		AchievementMap achievementMap = new AchievementMap();
-		RewardParser rewardParser = new RewardParser(mainConfig, langConfig, plugin, materialHelper);
+		RewardParser rewardParser = new RewardParser(mainConfig, langConfig, plugin, materialHelper,
+				new TaskScheduler(plugin, false));
 		ConfigurationParser underTest = new ConfigurationParser(mainConfig, langConfig, new YamlConfiguration(),
 				achievementMap, new HashSet<>(), new StringBuilder(), Logger.getAnonymousLogger(),
 				new YamlUpdater(plugin), plugin, rewardParser);
@@ -224,7 +228,8 @@ class ConfigurationParserTest {
 		YamlConfiguration mainConfig = new YamlConfiguration();
 		YamlConfiguration langConfig = new YamlConfiguration();
 		AchievementMap achievementMap = new AchievementMap();
-		RewardParser rewardParser = new RewardParser(mainConfig, langConfig, plugin, materialHelper);
+		RewardParser rewardParser = new RewardParser(mainConfig, langConfig, plugin, materialHelper,
+				new TaskScheduler(plugin, false));
 		ConfigurationParser underTest = new ConfigurationParser(mainConfig, langConfig, new YamlConfiguration(),
 				achievementMap, new HashSet<>(), new StringBuilder(), Logger.getAnonymousLogger(),
 				new YamlUpdater(plugin), plugin, rewardParser);
@@ -268,7 +273,8 @@ class ConfigurationParserTest {
 		YamlConfiguration mainConfig = new YamlConfiguration();
 		YamlConfiguration langConfig = new YamlConfiguration();
 		AchievementMap achievementMap = new AchievementMap();
-		RewardParser rewardParser = new RewardParser(mainConfig, langConfig, plugin, materialHelper);
+		RewardParser rewardParser = new RewardParser(mainConfig, langConfig, plugin, materialHelper,
+				new TaskScheduler(plugin, false));
 		ConfigurationParser underTest = new ConfigurationParser(mainConfig, langConfig, new YamlConfiguration(),
 				achievementMap, new HashSet<>(), new StringBuilder(), logger, new YamlUpdater(plugin), plugin,
 				rewardParser);

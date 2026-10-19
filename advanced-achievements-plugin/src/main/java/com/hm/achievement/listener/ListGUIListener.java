@@ -27,6 +27,7 @@ import com.hm.achievement.gui.AchievementInventoryHolder;
 import com.hm.achievement.gui.CategoryGUI;
 import com.hm.achievement.gui.GUIItems;
 import com.hm.achievement.gui.MainGUI;
+import com.hm.achievement.scheduler.TaskScheduler;
 
 /**
  * Listener class to deal with the GUIs from the /aach list command.
@@ -40,15 +41,17 @@ public class ListGUIListener implements Listener {
 	private final MainGUI mainGUI;
 	private final CategoryGUI categoryGUI;
 	private final GUIItems guiItems;
+	private final TaskScheduler taskScheduler;
 
 	@Inject
 	public ListGUIListener(@Named("main") YamlConfiguration mainConfig, Set<Category> disabledCategories, MainGUI mainGUI,
-			CategoryGUI categoryGUI, GUIItems guiItems) {
+			CategoryGUI categoryGUI, GUIItems guiItems, TaskScheduler taskScheduler) {
 		this.mainConfig = mainConfig;
 		this.disabledCategories = disabledCategories;
 		this.mainGUI = mainGUI;
 		this.categoryGUI = categoryGUI;
 		this.guiItems = guiItems;
+		this.taskScheduler = taskScheduler;
 	}
 
 	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -84,8 +87,10 @@ public class ListGUIListener implements Listener {
 			if (StringUtils.isBlank(command)) {
 				mainGUI.displayMainGUI(player);
 			} else {
-				Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(),
-						StringUtils.replace(command, "PLAYER", player.getName()));
+				String playerCommand = StringUtils.replace(command, "PLAYER", player.getName());
+				// Console commands must be dispatched from the global region thread with Folia.
+				taskScheduler.runOnGlobalThread(
+						() -> Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), playerCommand));
 			}
 		} else if (event.getRawSlot() == inventory.getSize() - ROW_SIZE) {
 			categoryGUI.displayCategoryGUI(holder.getCategoryItem(), player, currentPage - 1);

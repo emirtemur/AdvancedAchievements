@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.function.LongSupplier;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -16,10 +17,10 @@ import javax.inject.Singleton;
 import org.apache.commons.lang3.StringUtils;
 import org.bukkit.Bukkit;
 
-import com.hm.achievement.AdvancedAchievements;
 import com.hm.achievement.category.MultipleAchievements;
 import com.hm.achievement.category.NormalAchievements;
 import com.hm.achievement.lifecycle.Cleanable;
+import com.hm.achievement.scheduler.TaskScheduler;
 
 /**
  * Class used to provide a cache wrapper for various database statistics, in order to reduce load of database and enable
@@ -31,7 +32,7 @@ import com.hm.achievement.lifecycle.Cleanable;
 @Singleton
 public class CacheManager implements Cleanable {
 
-	private final AdvancedAchievements advancedAchievements;
+	private final TaskScheduler taskScheduler;
 	private final AbstractDatabaseManager databaseManager;
 	// Statistics of the different players for normal achievements; keys in the inner maps correspond to UUIDs.
 	private final Map<NormalAchievements, Map<UUID, CachedStatistic>> normalAchievementsToPlayerStatistics;
@@ -42,8 +43,8 @@ public class CacheManager implements Cleanable {
 	private final Map<UUID, Set<String>> receivedAchievementsCache;
 
 	@Inject
-	public CacheManager(AdvancedAchievements advancedAchievements, AbstractDatabaseManager databaseManager) {
-		this.advancedAchievements = advancedAchievements;
+	public CacheManager(TaskScheduler taskScheduler, AbstractDatabaseManager databaseManager) {
+		this.taskScheduler = taskScheduler;
 		this.databaseManager = databaseManager;
 		normalAchievementsToPlayerStatistics = new EnumMap<>(NormalAchievements.class);
 		multipleAchievementsToPlayerStatistics = new EnumMap<>(MultipleAchievements.class);
@@ -98,17 +99,23 @@ public class CacheManager implements Cleanable {
 			UUID uuid = keyUuidMapper.apply(key);
 			CachedStatistic statistic = entry.getValue();
 			if (statistic.didPlayerDisconnect() && statistic.isDatabaseConsistent()) {
-				// Player was disconnected at some point in the recent past delegate cleaning to the main server thread.
-				Bukkit.getScheduler().callSyncMethod(advancedAchievements, () -> {
+				// Player was disconnected at some point in the recent past delegate cleaning to the main server thread
+				// (global region thread with Folia).
+				taskScheduler.runGlobal(() -> categoryMap.computeIfPresent(key, (k, current) -> {
 					// Check again whether statistic has been written to the database. This is necessary to cover
-					// cases where the player may have reconnected in the meantime.
+					// cases where the player may have reconnected in the meantime. Running within computeIfPresent
+					// excludes concurrent increments of the same entry (see incrementCachedStatistic).
+					if (current != statistic) {
+						return current;
+					}
 					if (statistic.isDatabaseConsistent()) {
-						categoryMap.remove(key);
-					} else if (Bukkit.getPlayer(uuid) != null) {
+						return null;
+					}
+					if (Bukkit.getPlayer(uuid) != null) {
 						statistic.resetDisconnection();
 					}
-					return null;
-				});
+					return statistic;
+				}));
 			}
 		}
 	}
@@ -143,18 +150,8 @@ public class CacheManager implements Cleanable {
 	 * @return the updated statistic value
 	 */
 	public long getAndIncrementStatisticAmount(NormalAchievements category, UUID player, int value) {
-		Map<UUID, CachedStatistic> cache = getHashMap(category);
-		CachedStatistic statistic = cache.get(player);
-		if (statistic == null) {
-			CachedStatistic loadedStatistic = new CachedStatistic(
-					databaseManager.getNormalAchievementAmount(player, category), true);
-			CachedStatistic existingStatistic = cache.putIfAbsent(player, loadedStatistic);
-			statistic = existingStatistic == null ? loadedStatistic : existingStatistic;
-		}
-		if (value != 0) {
-			statistic.setValue(statistic.getValue() + value);
-		}
-		return statistic.getValue();
+		return incrementCachedStatistic(getHashMap(category), player,
+				() -> databaseManager.getNormalAchievementAmount(player, category), value);
 	}
 
 	/**
@@ -169,18 +166,35 @@ public class CacheManager implements Cleanable {
 	 */
 	public long getAndIncrementStatisticAmount(MultipleAchievements category, String subcategory, UUID player, int value) {
 		SubcategoryUUID key = new SubcategoryUUID(subcategory, player);
-		Map<SubcategoryUUID, CachedStatistic> cache = getHashMap(category);
-		CachedStatistic statistic = cache.get(key);
-		if (statistic == null) {
-			CachedStatistic loadedStatistic = new CachedStatistic(
-					databaseManager.getMultipleAchievementAmount(player, category, key.getSubcategory()), true);
-			CachedStatistic existingStatistic = cache.putIfAbsent(key, loadedStatistic);
-			statistic = existingStatistic == null ? loadedStatistic : existingStatistic;
+		return incrementCachedStatistic(getHashMap(category), key,
+				() -> databaseManager.getMultipleAchievementAmount(player, category, key.getSubcategory()), value);
+	}
+
+	/**
+	 * Increments a cached statistic, loading it from the database if absent. Increments are applied within
+	 * computeIfPresent, so that they can't be lost to a concurrent removal of the entry by cleanStaleCaches.
+	 */
+	private <K> long incrementCachedStatistic(Map<K, CachedStatistic> cache, K key, LongSupplier databaseLoader,
+			int value) {
+		while (true) {
+			CachedStatistic statistic = cache.get(key);
+			if (statistic == null) {
+				// The database is queried outside of any map operation, which must remain short.
+				cache.putIfAbsent(key, new CachedStatistic(databaseLoader.getAsLong(), true));
+				continue;
+			}
+			if (value == 0) {
+				return statistic.getValue();
+			}
+			long[] updatedValue = new long[1];
+			if (cache.computeIfPresent(key, (k, current) -> {
+				updatedValue[0] = current.increment(value);
+				return current;
+			}) != null) {
+				return updatedValue[0];
+			}
+			// Entry removed concurrently, reload it.
 		}
-		if (value != 0) {
-			statistic.setValue(statistic.getValue() + value);
-		}
-		return statistic.getValue();
 	}
 
 	/**
@@ -210,8 +224,7 @@ public class CacheManager implements Cleanable {
 
 		Map<String, Long> amounts = new HashMap<>();
 		for (String subcategory : subcategories) {
-			SubcategoryUUID key = new SubcategoryUUID(subcategory, player);
-			amounts.put(subcategory, cache.get(key).getValue());
+			amounts.put(subcategory, getAndIncrementStatisticAmount(category, subcategory, player, 0));
 		}
 		return amounts;
 	}
@@ -283,27 +296,25 @@ public class CacheManager implements Cleanable {
 				MultipleAchievements multipleCategory = NormalAchievements.BREWING.toString().equals(category)
 						? MultipleAchievements.BREWINGRECIPES
 						: MultipleAchievements.getByName(category);
-				Map<SubcategoryUUID, CachedStatistic> cache = getHashMap(multipleCategory);
-				CachedStatistic statistic = cache.get(key);
-				if (statistic == null) {
-					cache.put(key, new CachedStatistic(0L, false));
-				} else {
-					statistic.setValue(0L);
-				}
+				resetCachedStatistic(getHashMap(multipleCategory), key);
 			} else {
 				NormalAchievements category = NormalAchievements.getByName(categoryWithSubcategory);
 				if (category == NormalAchievements.CONNECTIONS) {
 					databaseManager.clearConnection(uuid);
 				} else {
-					Map<UUID, CachedStatistic> cache = getHashMap(category);
-					CachedStatistic statistic = cache.get(uuid);
-					if (statistic == null) {
-						cache.put(uuid, new CachedStatistic(0L, false));
-					} else {
-						statistic.setValue(0L);
-					}
+					resetCachedStatistic(getHashMap(category), uuid);
 				}
 			}
+		});
+	}
+
+	private <K> void resetCachedStatistic(Map<K, CachedStatistic> cache, K key) {
+		cache.compute(key, (k, statistic) -> {
+			if (statistic == null) {
+				return new CachedStatistic(0L, false);
+			}
+			statistic.setValue(0L);
+			return statistic;
 		});
 	}
 

@@ -14,6 +14,7 @@ import com.earth2me.essentials.Essentials;
 import com.hm.achievement.category.NormalAchievements;
 import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.CacheManager;
+import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.StatisticIncreaseHandler;
 
 /**
@@ -27,6 +28,8 @@ public class AchievePlayTimeRunnable extends StatisticIncreaseHandler implements
 
 	private static final long MILLIS_PER_HOUR = TimeUnit.HOURS.toMillis(1);
 
+	private final TaskScheduler taskScheduler;
+
 	private Essentials essentials;
 	private long previousTimeMillis;
 
@@ -34,8 +37,9 @@ public class AchievePlayTimeRunnable extends StatisticIncreaseHandler implements
 
 	@Inject
 	public AchievePlayTimeRunnable(@Named("main") YamlConfiguration mainConfig, AchievementMap achievementMap,
-			CacheManager cacheManager) {
+			CacheManager cacheManager, TaskScheduler taskScheduler) {
 		super(mainConfig, achievementMap, cacheManager);
+		this.taskScheduler = taskScheduler;
 
 		if (Bukkit.getPluginManager().isPluginEnabled("Essentials")) {
 			essentials = (Essentials) Bukkit.getPluginManager().getPlugin("Essentials");
@@ -55,7 +59,9 @@ public class AchievePlayTimeRunnable extends StatisticIncreaseHandler implements
 	public void run() {
 		long currentTimeMillis = System.currentTimeMillis();
 		int millisSincePreviousRun = (int) (currentTimeMillis - previousTimeMillis);
-		Bukkit.getOnlinePlayers().forEach(p -> updateTime(p, millisSincePreviousRun));
+		// With Folia, each player is processed on the region thread that owns them.
+		Bukkit.getOnlinePlayers()
+				.forEach(p -> taskScheduler.runOnEntityThread(p, () -> updateTime(p, millisSincePreviousRun)));
 		previousTimeMillis = currentTimeMillis;
 	}
 

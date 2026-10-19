@@ -10,10 +10,10 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.PlayerBucketFillEvent;
 
-import com.hm.achievement.AdvancedAchievements;
 import com.hm.achievement.category.NormalAchievements;
 import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.CacheManager;
+import com.hm.achievement.scheduler.TaskScheduler;
 
 /**
  * Listener class to deal with WaterBuckets achievements.
@@ -25,9 +25,9 @@ public class WaterBucketsListener extends AbstractRateLimitedListener {
 
 	@Inject
 	public WaterBucketsListener(@Named("main") YamlConfiguration mainConfig, AchievementMap achievementMap,
-			CacheManager cacheManager, AdvancedAchievements advancedAchievements,
+			CacheManager cacheManager, TaskScheduler taskScheduler,
 			@Named("lang") YamlConfiguration langConfig) {
-		super(NormalAchievements.WATERBUCKETS, mainConfig, achievementMap, cacheManager, advancedAchievements, langConfig);
+		super(NormalAchievements.WATERBUCKETS, mainConfig, achievementMap, cacheManager, taskScheduler, langConfig);
 	}
 
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

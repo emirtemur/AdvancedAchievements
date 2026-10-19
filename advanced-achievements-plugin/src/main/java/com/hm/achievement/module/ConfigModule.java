@@ -1,7 +1,7 @@
 package com.hm.achievement.module;
 
-import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.inject.Named;
 import javax.inject.Singleton;
@@ -19,7 +19,8 @@ public class ConfigModule {
 	@Provides
 	@Singleton
 	Set<Category> provideDisabledCategories() {
-		return new HashSet<>();
+		// Concurrent set as it is read by several region threads with Folia while it may be refilled by a reload.
+		return ConcurrentHashMap.newKeySet();
 	}
 
 	@Provides

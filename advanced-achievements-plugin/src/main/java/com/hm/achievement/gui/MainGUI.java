@@ -25,6 +25,7 @@ import com.hm.achievement.category.NormalAchievements;
 import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.CacheManager;
 import com.hm.achievement.lifecycle.Reloadable;
+import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.ColorHelper;
 import com.hm.achievement.utils.NumberHelper;
 
@@ -43,6 +44,7 @@ public class MainGUI implements Reloadable {
 	private final Set<Category> disabledCategories;
 	private final GUIItems guiItems;
 	private final AchievementMap achievementMap;
+	private final TaskScheduler taskScheduler;
 
 	private boolean configHideNotReceivedCategories;
 
@@ -53,7 +55,7 @@ public class MainGUI implements Reloadable {
 	@Inject
 	public MainGUI(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
 			AdvancedAchievements advancedAchievements, CacheManager cacheManager, Set<Category> disabledCategories,
-			GUIItems guiItems, AchievementMap achievementMap) {
+			GUIItems guiItems, AchievementMap achievementMap, TaskScheduler taskScheduler) {
 		this.mainConfig = mainConfig;
 		this.langConfig = langConfig;
 		this.advancedAchievements = advancedAchievements;
@@ -61,6 +63,7 @@ public class MainGUI implements Reloadable {
 		this.disabledCategories = disabledCategories;
 		this.guiItems = guiItems;
 		this.achievementMap = achievementMap;
+		this.taskScheduler = taskScheduler;
 	}
 
 	@Override
@@ -84,10 +87,10 @@ public class MainGUI implements Reloadable {
 			return;
 		}
 
-		advancedAchievements.getServer().getScheduler().runTaskAsynchronously(advancedAchievements, () -> {
+		taskScheduler.runAsync(() -> {
 			try {
 				cacheManager.getPlayerAchievements(playerId);
-				advancedAchievements.getServer().getScheduler().runTask(advancedAchievements, () -> {
+				taskScheduler.runForEntity(player, () -> {
 					if (player.isOnline()) {
 						displayCachedMainGUI(player);
 					}

@@ -32,8 +32,9 @@ import com.hm.achievement.domain.Achievement;
 import com.hm.achievement.gui.GUIItems;
 import com.hm.achievement.gui.OrderedCategory;
 import com.hm.achievement.lifecycle.Reloadable;
+import com.hm.achievement.scheduler.TaskScheduler;
+import com.hm.achievement.scheduler.TaskScheduler.Task;
 import com.hm.achievement.utils.StringHelper;
-import org.bukkit.scheduler.BukkitTask;
 
 @SuppressWarnings("deprecation")
 @Singleton
@@ -49,6 +50,7 @@ public class AdvancementManager implements Reloadable {
 	private final Logger logger;
 	private final Set<Category> disabledCategories;
 	private final AchievementMap achievementMap;
+	private final TaskScheduler taskScheduler;
 
 	private boolean configRegisterAdvancementDescriptions;
 	private boolean configHideAdvancements;
@@ -56,7 +58,7 @@ public class AdvancementManager implements Reloadable {
 	private String configRootAdvancementTitle;
 	private String configBackgroundTexture;
 	private int generatedAdvancements;
-	private BukkitTask generationTask;
+	private Task generationTask;
 	private static final int DEFAULT_PER_TICK = 10;
 
 	private static final class LoadRequest {
@@ -85,13 +87,15 @@ public class AdvancementManager implements Reloadable {
 			AchievementMap achievementMap,
 			AdvancedAchievements advancedAchievements,
 			Logger logger,
-			Set<Category> disabledCategories) {
+			Set<Category> disabledCategories,
+			TaskScheduler taskScheduler) {
 		this.mainConfig = mainConfig;
 		this.guiItems = guiItems;
 		this.advancedAchievements = advancedAchievements;
 		this.logger = logger;
 		this.disabledCategories = disabledCategories;
 		this.achievementMap = achievementMap;
+		this.taskScheduler = taskScheduler;
 	}
 
 	@Override
@@ -211,6 +215,12 @@ public class AdvancementManager implements Reloadable {
 	public void generateAdvancementsIncremental(boolean forceRegenerate,
 			CommandSender feedback,
 			Runnable onComplete) {
+		// Advancements are server-wide data and generation state is only accessed by the main thread (global region
+		// thread with Folia), whereas commands may be executed by any region thread with Folia.
+		taskScheduler.runOnGlobalThread(() -> startGeneration(forceRegenerate, feedback, onComplete));
+	}
+
+	private void startGeneration(boolean forceRegenerate, CommandSender feedback, Runnable onComplete) {
 		if (generationTask != null) {
 			if (feedback != null) {
 				feedback.sendMessage("§cAdvancement generation is already running.");
@@ -219,8 +229,11 @@ public class AdvancementManager implements Reloadable {
 		}
 
 		final List<NamespacedKey> toRemove = forceRegenerate ? findOldAchievementAdvancements() : List.of();
-		final List<LoadRequest> loads = buildLoadRequests(forceRegenerate);
 		final boolean reloadData = forceRegenerate && !toRemove.isEmpty();
+		// Folia doesn't support reloading server data at runtime. Old advancement files are still removed, and the
+		// additive generation performed on startup recreates them after a restart.
+		final boolean regenerateOnRestart = reloadData && taskScheduler.isFolia();
+		final List<LoadRequest> loads = regenerateOnRestart ? List.of() : buildLoadRequests(forceRegenerate);
 
 		if (feedback != null) {
 			feedback.sendMessage("§7Generating advancements in small batches to reduce lag...");
@@ -229,7 +242,7 @@ public class AdvancementManager implements Reloadable {
 		final int perTick = Math.max(1, mainConfig.getInt("AdvancementGenerationPerTick", DEFAULT_PER_TICK));
 		final GenerationState state = new GenerationState();
 
-		generationTask = Bukkit.getScheduler().runTaskTimer(advancedAchievements, () -> {
+		generationTask = taskScheduler.runGlobalTimer(() -> {
 			if (state.terminal) {
 				return;
 			}
@@ -244,6 +257,18 @@ public class AdvancementManager implements Reloadable {
 						// authoritative check that the live registry has been cleared.
 						Bukkit.getUnsafe().removeAdvancement(key);
 						processed++;
+					}
+					return;
+				}
+
+				if (regenerateOnRestart) {
+					state.terminal = true;
+					stopGenerationTask();
+					logger.info("Removed " + toRemove.size() + " advancement files; they will be regenerated on the next "
+							+ "server restart as Folia cannot reload server data at runtime.");
+					if (feedback != null) {
+						feedback.sendMessage("§eOld advancements were removed. Restart the server to regenerate them, "
+								+ "as Folia cannot reload server data at runtime.");
 					}
 					return;
 				}
@@ -279,8 +304,9 @@ public class AdvancementManager implements Reloadable {
 					state.terminal = true;
 					stopGenerationTask();
 
-					// Make tab appear immediately for online players
-					Bukkit.getOnlinePlayers().forEach(this::ensureRootVisible);
+					// Make tab appear immediately for online players, on the threads owning them with Folia.
+					Bukkit.getOnlinePlayers()
+							.forEach(p -> taskScheduler.runOnEntityThread(p, () -> ensureRootVisible(p)));
 
 					if (feedback != null) {
 						feedback.sendMessage("§aAdvancements generation finished.");
@@ -300,7 +326,7 @@ public class AdvancementManager implements Reloadable {
 	}
 
 	private void stopGenerationTask() {
-		BukkitTask task = generationTask;
+		Task task = generationTask;
 		generationTask = null;
 		if (task != null) {
 			task.cancel();

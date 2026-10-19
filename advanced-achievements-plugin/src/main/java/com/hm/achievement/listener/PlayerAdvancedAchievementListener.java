@@ -48,6 +48,7 @@ import com.hm.achievement.db.CacheManager;
 import com.hm.achievement.domain.Achievement;
 import com.hm.achievement.domain.Reward;
 import com.hm.achievement.lifecycle.Reloadable;
+import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.ColorHelper;
 import com.hm.achievement.utils.FancyMessageSender;
 import com.hm.achievement.utils.StringHelper;
@@ -96,6 +97,7 @@ public class PlayerAdvancedAchievementListener implements Listener, Reloadable {
 	private final AbstractDatabaseManager databaseManager;
 	private final ToggleCommand toggleCommand;
 	private final FancyMessageSender fancyMessageSender;
+	private final TaskScheduler taskScheduler;
 
 	private String configFireworkStyle;
 	private boolean configFirework;
@@ -120,7 +122,7 @@ public class PlayerAdvancedAchievementListener implements Listener, Reloadable {
 			@Named("lang") YamlConfiguration langConfig, Logger logger, StringBuilder pluginHeader,
 			CacheManager cacheManager, AdvancedAchievements advancedAchievements, RewardParser rewardParser,
 			AchievementMap achievementMap, AbstractDatabaseManager databaseManager, ToggleCommand toggleCommand,
-			FancyMessageSender fancyMessageSender) {
+			FancyMessageSender fancyMessageSender, TaskScheduler taskScheduler) {
 		this.mainConfig = mainConfig;
 		this.langConfig = langConfig;
 		this.logger = logger;
@@ -132,6 +134,7 @@ public class PlayerAdvancedAchievementListener implements Listener, Reloadable {
 		this.databaseManager = databaseManager;
 		this.toggleCommand = toggleCommand;
 		this.fancyMessageSender = fancyMessageSender;
+		this.taskScheduler = taskScheduler;
 	}
 
 	@Override
@@ -171,7 +174,18 @@ public class PlayerAdvancedAchievementListener implements Listener, Reloadable {
 		}
 	}
 
+	/**
+	 * Awards an achievement to a player. With Folia, the award is processed on the region thread owning the player, as
+	 * it may be triggered from another thread (e.g. by a console command).
+	 *
+	 * @param player
+	 * @param achievement
+	 */
 	public void awardAchievement(Player player, Achievement achievement) {
+		taskScheduler.runOnEntityThread(player, () -> awardAchievementOnOwningThread(player, achievement));
+	}
+
+	private void awardAchievementOnOwningThread(Player player, Achievement achievement) {
 		// Achievement could have already been received if MultiCommand is set to true in the configuration.
 		boolean newlyReceived = !cacheManager.hasPlayerAchievement(player.getUniqueId(), achievement.getName());
 		databaseManager.registerAchievement(player.getUniqueId(), achievement.getName(), System.currentTimeMillis());
@@ -225,7 +239,7 @@ public class PlayerAdvancedAchievementListener implements Listener, Reloadable {
 			// NotifyOtherPlayers is disabled and player has used /aach toggle.
 			if (!p.getName().equals(player.getName())
 					&& (configNotifyOtherPlayers ^ toggleCommand.isPlayerToggled(p, achievement.getType()))) {
-				displayNotification(player, nameToShowUser, p);
+				taskScheduler.runOnEntityThread(p, () -> displayNotification(player, nameToShowUser, p));
 			}
 		}
 
@@ -246,8 +260,8 @@ public class PlayerAdvancedAchievementListener implements Listener, Reloadable {
 			String message = StringUtils.replaceOnce(langBossBarProgress, "AMOUNT", receivedAmount + "/" + totalAmount);
 			BossBar bossBar = Bukkit.getServer().createBossBar(message, barColor, BarStyle.SOLID);
 			bossBar.setProgress(progress);
-			Bukkit.getScheduler().scheduleSyncDelayedTask(advancedAchievements, () -> bossBar.addPlayer(player), 110);
-			Bukkit.getScheduler().scheduleSyncDelayedTask(advancedAchievements, () -> bossBar.removePlayer(player), 240);
+			taskScheduler.runForEntityLater(player, () -> bossBar.addPlayer(player), 110);
+			taskScheduler.runForEntityLater(player, () -> bossBar.removePlayer(player), 240);
 		}
 	}
 

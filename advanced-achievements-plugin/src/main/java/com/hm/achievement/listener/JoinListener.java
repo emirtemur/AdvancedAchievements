@@ -17,6 +17,7 @@ import com.hm.achievement.AdvancedAchievements;
 import com.hm.achievement.advancement.AchievementAdvancement;
 import com.hm.achievement.advancement.AdvancementManager;
 import com.hm.achievement.db.CacheManager;
+import com.hm.achievement.scheduler.TaskScheduler;
 
 /**
  * Listener class to deal with advancements. This class uses delays processing of tasks to avoid spamming a barely
@@ -30,11 +31,14 @@ public class JoinListener implements Listener {
 
 	private final AdvancedAchievements advancedAchievements;
 	private final CacheManager cacheManager;
+	private final TaskScheduler taskScheduler;
 
 	@Inject
-	public JoinListener(AdvancedAchievements advancedAchievements, CacheManager cacheManager) {
+	public JoinListener(AdvancedAchievements advancedAchievements, CacheManager cacheManager,
+			TaskScheduler taskScheduler) {
 		this.advancedAchievements = advancedAchievements;
 		this.cacheManager = cacheManager;
+		this.taskScheduler = taskScheduler;
 	}
 
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -49,8 +53,7 @@ public class JoinListener implements Listener {
 	 * @param player
 	 */
 	private void scheduleReceivedCacheLoad(Player player) {
-		Bukkit.getScheduler().runTaskAsynchronously(advancedAchievements,
-				() -> cacheManager.getPlayerAchievements(player.getUniqueId()));
+		taskScheduler.runAsync(() -> cacheManager.getPlayerAchievements(player.getUniqueId()));
 
 	}
 
@@ -62,7 +65,7 @@ public class JoinListener implements Listener {
 	 * @param player
 	 */
 	private void scheduleAwardAdvancements(Player player) {
-		Bukkit.getScheduler().scheduleSyncDelayedTask(advancedAchievements, () -> {
+		taskScheduler.runForEntityLater(player, () -> {
 			// Check that the player is still connected.
 			if (!player.isOnline()) {
 				return;

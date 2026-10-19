@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -30,6 +31,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -42,6 +44,7 @@ import com.hm.achievement.db.CacheManager;
 import com.hm.achievement.domain.Achievement;
 import com.hm.achievement.domain.Achievement.AchievementBuilder;
 import com.hm.achievement.domain.Reward;
+import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.FancyMessageSender;
 
 /**
@@ -78,8 +81,8 @@ class PlayerAdvancedAchievementListenerTest {
 		YamlConfiguration langConfig = YamlConfiguration
 				.loadConfiguration(new InputStreamReader(getClass().getResourceAsStream("/lang.yml")));
 		underTest = new PlayerAdvancedAchievementListener(mainConfig, langConfig, mock(Logger.class),
-				new StringBuilder(PLUGIN_HEADER), new CacheManager(plugin, abstractDatabaseManager), plugin, null,
-				achievementMap, abstractDatabaseManager, null, new FancyMessageSender());
+				new StringBuilder(PLUGIN_HEADER), new CacheManager(new TaskScheduler(plugin, false), abstractDatabaseManager), plugin, null,
+				achievementMap, abstractDatabaseManager, null, new FancyMessageSender(), new TaskScheduler(plugin, false));
 		underTest.extractConfigurationParameters();
 		when(player.getUniqueId()).thenReturn(PLAYER_UUID);
 		when(player.getName()).thenReturn("DarkPyves");
@@ -94,7 +97,49 @@ class PlayerAdvancedAchievementListenerTest {
 				.message("Connected for the first time!")
 				.build();
 
+		try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+			bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
+			underTest.awardAchievement(player, achievement);
+		}
+
+		verify(abstractDatabaseManager).registerAchievement(eq(PLAYER_UUID), eq("connect_1"), anyLong());
+	}
+
+	@Test
+	void awardFromAnotherThreadShouldBeProcessedOnPlayerThread() {
+		// With Folia, achievements may be given from a thread that doesn't own the player, e.g. via a console command.
+		AchievementMap achievementMap = new AchievementMap();
+		achievementMap.put(new AchievementBuilder().name("connect_1").displayName("Good Choice").build());
+		achievementMap.put(new AchievementBuilder().name("another").displayName("Another").build());
+		YamlConfiguration mainConfig = YamlConfiguration
+				.loadConfiguration(new InputStreamReader(getClass().getResourceAsStream("/config-reception.yml")));
+		YamlConfiguration langConfig = YamlConfiguration
+				.loadConfiguration(new InputStreamReader(getClass().getResourceAsStream("/lang.yml")));
+		TaskScheduler taskScheduler = mock(TaskScheduler.class);
+		underTest = new PlayerAdvancedAchievementListener(mainConfig, langConfig, mock(Logger.class),
+				new StringBuilder(PLUGIN_HEADER), new CacheManager(taskScheduler, abstractDatabaseManager), plugin, null,
+				achievementMap, abstractDatabaseManager, null, new FancyMessageSender(), taskScheduler);
+		underTest.extractConfigurationParameters();
+		Achievement achievement = new AchievementBuilder()
+				.name("connect_1")
+				.displayName("Good Choice")
+				.message("Connected for the first time!")
+				.build();
+
 		underTest.awardAchievement(player, achievement);
+
+		ArgumentCaptor<Runnable> award = ArgumentCaptor.forClass(Runnable.class);
+		verify(taskScheduler).runOnEntityThread(eq(player), award.capture());
+		verify(abstractDatabaseManager, never()).registerAchievement(any(), anyString(), anyLong());
+
+		when(player.getUniqueId()).thenReturn(PLAYER_UUID);
+		when(player.getName()).thenReturn("DarkPyves");
+		when(plugin.getServer()).thenReturn(server);
+		doReturn(Collections.emptyList()).when(server).getOnlinePlayers();
+		when(abstractDatabaseManager.getPlayerAchievementNames(PLAYER_UUID)).thenReturn(new HashSet<>());
+		try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+			award.getValue().run();
+		}
 
 		verify(abstractDatabaseManager).registerAchievement(eq(PLAYER_UUID), eq("connect_1"), anyLong());
 	}
@@ -113,8 +158,8 @@ class PlayerAdvancedAchievementListenerTest {
 		YamlConfiguration langConfig = YamlConfiguration
 				.loadConfiguration(new InputStreamReader(getClass().getResourceAsStream("/lang.yml")));
 		underTest = new PlayerAdvancedAchievementListener(mainConfig, langConfig, mock(Logger.class),
-				new StringBuilder(PLUGIN_HEADER), new CacheManager(plugin, abstractDatabaseManager), plugin, null,
-				achievementMap, abstractDatabaseManager, null, new FancyMessageSender());
+				new StringBuilder(PLUGIN_HEADER), new CacheManager(new TaskScheduler(plugin, false), abstractDatabaseManager), plugin, null,
+				achievementMap, abstractDatabaseManager, null, new FancyMessageSender(), new TaskScheduler(plugin, false));
 		underTest.extractConfigurationParameters();
 		when(player.getUniqueId()).thenReturn(PLAYER_UUID);
 		when(player.getName()).thenReturn("DarkPyves");
@@ -123,7 +168,10 @@ class PlayerAdvancedAchievementListenerTest {
 		when(abstractDatabaseManager.getPlayerAchievementNames(PLAYER_UUID))
 				.thenReturn(new HashSet<>(Collections.singleton("connect_1")));
 
-		assertDoesNotThrow(() -> underTest.awardAchievement(player, achievement));
+		try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+			bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
+			assertDoesNotThrow(() -> underTest.awardAchievement(player, achievement));
+		}
 		verify(abstractDatabaseManager).registerAchievement(eq(PLAYER_UUID), eq("connect_1"), anyLong());
 	}
 
@@ -146,10 +194,10 @@ class PlayerAdvancedAchievementListenerTest {
 		YamlConfiguration langConfig = YamlConfiguration
 				.loadConfiguration(new InputStreamReader(getClass().getResourceAsStream("/lang.yml")));
 		Logger logger = mock(Logger.class);
-		CacheManager cacheManager = new CacheManager(plugin, abstractDatabaseManager);
+		CacheManager cacheManager = new CacheManager(new TaskScheduler(plugin, false), abstractDatabaseManager);
 		underTest = new PlayerAdvancedAchievementListener(mainConfig, langConfig, logger,
 				new StringBuilder(PLUGIN_HEADER), cacheManager, plugin, null,
-				achievementMap, abstractDatabaseManager, null, new FancyMessageSender());
+				achievementMap, abstractDatabaseManager, null, new FancyMessageSender(), new TaskScheduler(plugin, false));
 		underTest.extractConfigurationParameters();
 		when(player.getUniqueId()).thenReturn(PLAYER_UUID);
 		when(player.getName()).thenReturn("Tealon");
@@ -160,6 +208,7 @@ class PlayerAdvancedAchievementListenerTest {
 		NamespacedKey advancementKey = new NamespacedKey(plugin, AdvancementManager.getKey(achievement.getName()));
 
 		try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+			bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
 			bukkit.when(() -> Bukkit.getAdvancement(advancementKey))
 					.thenThrow(new IllegalStateException("advancement unavailable"));
 

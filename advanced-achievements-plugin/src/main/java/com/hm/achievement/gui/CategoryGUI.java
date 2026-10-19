@@ -39,6 +39,7 @@ import com.hm.achievement.db.CacheManager;
 import com.hm.achievement.domain.Achievement;
 import com.hm.achievement.domain.Reward;
 import com.hm.achievement.lifecycle.Reloadable;
+import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.NumberHelper;
 import com.hm.achievement.utils.ColorHelper;
 import com.hm.achievement.utils.StringHelper;
@@ -69,6 +70,7 @@ public class CategoryGUI implements Reloadable {
 	private final AbstractDatabaseManager databaseManager;
 	private final GUIItems guiItems;
 	private final AchievementMap achievementMap;
+	private final TaskScheduler taskScheduler;
 
 	private boolean configObfuscateNotReceived;
 	private boolean configObfuscateProgressiveAchievements;
@@ -96,7 +98,7 @@ public class CategoryGUI implements Reloadable {
 	public CategoryGUI(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
 			AdvancedAchievements advancedAchievements, CacheManager cacheManager,
 			AbstractDatabaseManager databaseManager, GUIItems guiItems,
-			AchievementMap achievementMap) {
+			AchievementMap achievementMap, TaskScheduler taskScheduler) {
 		this.mainConfig = mainConfig;
 		this.langConfig = langConfig;
 		this.advancedAchievements = advancedAchievements;
@@ -104,6 +106,7 @@ public class CategoryGUI implements Reloadable {
 		this.databaseManager = databaseManager;
 		this.guiItems = guiItems;
 		this.achievementMap = achievementMap;
+		this.taskScheduler = taskScheduler;
 	}
 
 	@Override
@@ -157,13 +160,13 @@ public class CategoryGUI implements Reloadable {
 								: Collections.emptySet();
 				UUID playerId = player.getUniqueId();
 				ItemStack clickedItem = item.clone();
-				advancedAchievements.getServer().getScheduler().runTaskAsynchronously(advancedAchievements, () -> {
+				taskScheduler.runAsync(() -> {
 					try {
 						Map<String, Long> subcategoriesToStatistics = getStatisticsMapping(category, subcategories,
 								playerId, achievements);
 						Set<String> receivedAchievementNames = new HashSet<>(cacheManager.getPlayerAchievements(playerId));
 						Map<String, String> achievementDates = databaseManager.getPlayerAchievementDates(playerId);
-						advancedAchievements.getServer().getScheduler().runTask(advancedAchievements, () -> {
+						taskScheduler.runForEntity(player, () -> {
 							if (player.isOnline()) {
 								displayPage(player, subcategoriesToStatistics, receivedAchievementNames, achievementDates,
 										requestedPage, clickedItem, achievements);

@@ -17,12 +17,12 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.ItemStack;
 
-import com.hm.achievement.AdvancedAchievements;
 import com.hm.achievement.category.MultipleAchievements;
 import com.hm.achievement.category.NormalAchievements;
 import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.CacheManager;
 import com.hm.achievement.domain.PotionRecipe;
+import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.InventoryHelper;
 import com.hm.achievement.utils.MaterialHelper;
 
@@ -39,9 +39,9 @@ public class BrewingListener extends AbstractRateLimitedListener {
 
 	@Inject
 	public BrewingListener(@Named("main") YamlConfiguration mainConfig, AchievementMap achievementMap,
-			CacheManager cacheManager, AdvancedAchievements advancedAchievements,
+			CacheManager cacheManager, TaskScheduler taskScheduler,
 			@Named("lang") YamlConfiguration langConfig, MaterialHelper materialHelper) {
-		super(NormalAchievements.BREWING, mainConfig, achievementMap, cacheManager, advancedAchievements, langConfig);
+		super(NormalAchievements.BREWING, mainConfig, achievementMap, cacheManager, taskScheduler, langConfig);
 		this.materialHelper = materialHelper;
 	}
 

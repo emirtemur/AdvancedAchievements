@@ -2,12 +2,12 @@ package com.hm.achievement.command.executable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -28,6 +28,7 @@ import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.AbstractDatabaseManager;
 import com.hm.achievement.db.data.AwardedDBAchievement;
 import com.hm.achievement.domain.Achievement;
+import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.StringHelper;
 
 /**
@@ -45,21 +46,24 @@ public class InspectCommand extends AbstractCommand {
 	private final AdvancedAchievements advancedAchievements;
 	private final AbstractDatabaseManager databaseManager;
 	private final AchievementMap achievementMap;
+	private final TaskScheduler taskScheduler;
 
+	// Concurrent maps as commands may be executed by several region threads with Folia.
 	private final Map<String, Long> lastCached;
 	private final Map<String, SupplierCommandPagination> cachedPaginations;
 
 	@Inject
 	public InspectCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
 			StringBuilder pluginHeader, AdvancedAchievements advancedAchievements, AbstractDatabaseManager databaseManager,
-			AchievementMap achievementMap) {
+			AchievementMap achievementMap, TaskScheduler taskScheduler) {
 		super(mainConfig, langConfig, pluginHeader);
 		this.advancedAchievements = advancedAchievements;
 		this.databaseManager = databaseManager;
 		this.achievementMap = achievementMap;
+		this.taskScheduler = taskScheduler;
 
-		this.lastCached = new HashMap<>();
-		this.cachedPaginations = new HashMap<>();
+		this.lastCached = new ConcurrentHashMap<>();
+		this.cachedPaginations = new ConcurrentHashMap<>();
 	}
 
 	@Override
@@ -92,17 +96,15 @@ public class InspectCommand extends AbstractCommand {
 			return;
 		}
 
-		advancedAchievements.getServer().getScheduler().runTaskAsynchronously(advancedAchievements, () -> {
+		taskScheduler.runAsync(() -> {
 			try {
 				List<AwardedDBAchievement> recipients = databaseManager
 						.getAchievementsRecipientList(achievement.getName());
-				advancedAchievements.getServer().getScheduler().runTask(advancedAchievements, () -> {
-					cache(achievement.getName(), recipients);
-					cachedPaginations.get(achievement.getName()).sendPage(page, sender);
-				});
+				taskScheduler.runForSender(sender,
+						() -> cache(achievement.getName(), recipients).sendPage(page, sender));
 			} catch (RuntimeException e) {
 				advancedAchievements.getLogger().warning("Could not inspect achievement recipients: " + e.getMessage());
-				advancedAchievements.getServer().getScheduler().runTask(advancedAchievements,
+				taskScheduler.runForSender(sender,
 						() -> sender.sendMessage(pluginHeader + langConfig.getString("database-error")));
 			}
 		});
@@ -146,8 +148,8 @@ public class InspectCommand extends AbstractCommand {
 
 	}
 
-	private void cache(String achievementName, List<AwardedDBAchievement> recipientList) {
-		// Player profile lookups and message delivery stay on the main server thread.
+	private SupplierCommandPagination cache(String achievementName, List<AwardedDBAchievement> recipientList) {
+		// Player profile lookups and message delivery stay on the sender's thread.
 		List<Supplier<String>> messages = recipientList.stream().map(achievement -> (Supplier<String>) () -> {
 			UUID uuid = achievement.getAwardedTo();
 			OfflinePlayer player = advancedAchievements.getServer().getOfflinePlayer(uuid);
@@ -158,5 +160,6 @@ public class InspectCommand extends AbstractCommand {
 		SupplierCommandPagination pagination = new SupplierCommandPagination(messages, PER_PAGE, langConfig);
 		cachedPaginations.put(achievementName, pagination);
 		lastCached.put(achievementName, System.currentTimeMillis());
+		return pagination;
 	}
 }

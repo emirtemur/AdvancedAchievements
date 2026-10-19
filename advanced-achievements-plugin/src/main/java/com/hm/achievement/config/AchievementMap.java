@@ -23,57 +23,37 @@ import com.hm.achievement.utils.StringHelper;
 @Singleton
 public class AchievementMap {
 
-	private final Map<String, Achievement> namesToAchievements = new HashMap<>();
-	private final Map<String, Achievement> sanitisedDisplayNamesToAchievements = new HashMap<>();
-	private final Map<Category, List<Achievement>> categoriesToAchievements = new HashMap<>();
-	private final Map<String, List<Achievement>> categoriesSubcategoriesToAchievements = new HashMap<>();
-	private final Map<Category, Set<String>> categoriesToSubcategories = new HashMap<>();
+	// The live index is replaced as a whole on reload, so that readers on other threads (region threads with Folia)
+	// never observe a partially rebuilt map. put() mutates the current index and is only meant for building a map
+	// that isn't being read concurrently, such as the one parsed before a reload.
+	private volatile Index index = new Index();
 
 	@Inject
 	public AchievementMap() {
 	}
 
 	public void put(Achievement achievement) {
-		namesToAchievements.put(achievement.getName(), achievement);
-		sanitisedDisplayNamesToAchievements.put(sanitise(achievement.getDisplayName()), achievement);
-		Category category = achievement.getCategory();
-		String subcategory = Objects.toString(achievement.getSubcategory(), "");
-		categoriesToAchievements.computeIfAbsent(category, c -> new ArrayList<>()).add(achievement);
-		categoriesToSubcategories.computeIfAbsent(category, c -> new HashSet<>()).add(subcategory);
-		if (category instanceof NormalAchievements) {
-			String key = subcategory.isEmpty()
-					? category.toString()
-					: category + "." + subcategory;
-			categoriesSubcategoriesToAchievements.computeIfAbsent(key, c -> new ArrayList<>())
-					.add(achievement);
-		} else if (category instanceof MultipleAchievements) {
-			categoriesSubcategoriesToAchievements
-					.computeIfAbsent(category + "." + achievement.getSubcategory(), c -> new ArrayList<>()).add(achievement);
-		}
+		index.put(achievement);
 	}
 
 	public Collection<Achievement> getAll() {
-		return namesToAchievements.values();
+		return index.namesToAchievements.values();
 	}
 
 	public Collection<String> getAllNames() {
-		return namesToAchievements.keySet();
+		return index.namesToAchievements.keySet();
 	}
 
 	public Collection<String> getAllSanitisedDisplayNames() {
-		return sanitisedDisplayNamesToAchievements.keySet();
+		return index.sanitisedDisplayNamesToAchievements.keySet();
 	}
 
 	public void clearAll() {
-		namesToAchievements.clear();
-		sanitisedDisplayNamesToAchievements.clear();
-		categoriesToAchievements.clear();
-		categoriesSubcategoriesToAchievements.clear();
-		categoriesToSubcategories.clear();
+		index = new Index();
 	}
 
 	public void replaceWith(AchievementMap replacement) {
-		clearAll();
+		Index replacementIndex = new Index();
 		// Sort before re-inserting: getAll() is backed by a HashMap and is therefore unordered, while put() appends to
 		// the lists consumers read in order. Sorting by subcategory first keeps a category's achievements contiguous
 		// per subcategory, which AdvancementManager relies on to find advancement-chain boundaries; sorting by
@@ -81,38 +61,67 @@ public class AchievementMap {
 		replacement.getAll().stream()
 				.sorted(Comparator.comparing((Achievement achievement) -> Objects.toString(achievement.getSubcategory(), ""))
 						.thenComparingLong(Achievement::getThreshold))
-				.forEach(this::put);
+				.forEach(replacementIndex::put);
+		index = replacementIndex;
 	}
 
 	public Achievement getForName(String name) {
-		return namesToAchievements.get(name);
+		return index.namesToAchievements.get(name);
 	}
 
 	public Achievement getForDisplayName(String displayName) {
-		return sanitisedDisplayNamesToAchievements.get(sanitise(displayName));
+		return index.sanitisedDisplayNamesToAchievements.get(sanitise(displayName));
 	}
 
 	public List<Achievement> getForCategory(Category category) {
-		return categoriesToAchievements.getOrDefault(category, Collections.emptyList());
+		return index.categoriesToAchievements.getOrDefault(category, Collections.emptyList());
 	}
 
 	public List<Achievement> getForCategoryAndSubcategory(Category category, String subcategory) {
 		String key = category instanceof NormalAchievements && subcategory.isEmpty()
 				? category.toString()
 				: category + "." + subcategory;
-		return categoriesSubcategoriesToAchievements.getOrDefault(key, Collections.emptyList());
+		return index.categoriesSubcategoriesToAchievements.getOrDefault(key, Collections.emptyList());
 	}
 
 	public Set<String> getSubcategoriesForCategory(Category category) {
-		return categoriesToSubcategories.getOrDefault(category, Collections.emptySet());
+		return index.categoriesToSubcategories.getOrDefault(category, Collections.emptySet());
 	}
 
 	public Set<String> getCategorySubcategories() {
-		return categoriesSubcategoriesToAchievements.keySet();
+		return index.categoriesSubcategoriesToAchievements.keySet();
 	}
 
-	private String sanitise(String displayName) {
+	private static String sanitise(String displayName) {
 		return StringHelper.removeFormattingCodes(displayName).toLowerCase();
 	}
 
+	private static final class Index {
+
+		private final Map<String, Achievement> namesToAchievements = new HashMap<>();
+		private final Map<String, Achievement> sanitisedDisplayNamesToAchievements = new HashMap<>();
+		private final Map<Category, List<Achievement>> categoriesToAchievements = new HashMap<>();
+		private final Map<String, List<Achievement>> categoriesSubcategoriesToAchievements = new HashMap<>();
+		private final Map<Category, Set<String>> categoriesToSubcategories = new HashMap<>();
+
+		private void put(Achievement achievement) {
+			namesToAchievements.put(achievement.getName(), achievement);
+			sanitisedDisplayNamesToAchievements.put(sanitise(achievement.getDisplayName()), achievement);
+			Category category = achievement.getCategory();
+			String subcategory = Objects.toString(achievement.getSubcategory(), "");
+			categoriesToAchievements.computeIfAbsent(category, c -> new ArrayList<>()).add(achievement);
+			categoriesToSubcategories.computeIfAbsent(category, c -> new HashSet<>()).add(subcategory);
+			if (category instanceof NormalAchievements) {
+				String key = subcategory.isEmpty()
+						? category.toString()
+						: category + "." + subcategory;
+				categoriesSubcategoriesToAchievements.computeIfAbsent(key, c -> new ArrayList<>())
+						.add(achievement);
+			} else if (category instanceof MultipleAchievements) {
+				categoriesSubcategoriesToAchievements
+						.computeIfAbsent(category + "." + achievement.getSubcategory(), c -> new ArrayList<>())
+						.add(achievement);
+			}
+		}
+	}
 }

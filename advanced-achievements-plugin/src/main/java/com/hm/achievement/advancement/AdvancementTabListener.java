@@ -2,28 +2,28 @@ package com.hm.achievement.advancement;
 
 import javax.inject.Inject;
 
-import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 
-import com.hm.achievement.AdvancedAchievements;
+import com.hm.achievement.scheduler.TaskScheduler;
 
 public class AdvancementTabListener implements Listener {
 
-	private final AdvancedAchievements advancedAchievements;
+	private final TaskScheduler taskScheduler;
 	private final AdvancementManager advancementManager;
 
 	@Inject
-	public AdvancementTabListener(AdvancedAchievements advancedAchievements, AdvancementManager advancementManager) {
-		this.advancedAchievements = advancedAchievements;
+	public AdvancementTabListener(TaskScheduler taskScheduler, AdvancementManager advancementManager) {
+		this.taskScheduler = taskScheduler;
 		this.advancementManager = advancementManager;
 	}
 
 	@EventHandler
 	public void onJoin(PlayerJoinEvent event) {
 		// 1 tick later so generation (if running) has time to register the parent
-		Bukkit.getScheduler().runTaskLater(advancedAchievements,
-				() -> advancementManager.ensureRootVisible(event.getPlayer()), 1L);
+		Player player = event.getPlayer();
+		taskScheduler.runForEntityLater(player, () -> advancementManager.ensureRootVisible(player), 1L);
 	}
 }

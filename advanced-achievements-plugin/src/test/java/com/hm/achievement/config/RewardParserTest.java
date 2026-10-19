@@ -2,7 +2,11 @@ package com.hm.achievement.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,6 +15,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Logger;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Server;
 import org.bukkit.World;
@@ -23,12 +28,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockito.Answers;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.hm.achievement.AdvancedAchievements;
 import com.hm.achievement.domain.Reward;
+import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.MaterialHelper;
 
 import net.milkbowl.vault.economy.Economy;
@@ -57,7 +65,8 @@ class RewardParserTest {
 		mainConfig = new YamlConfiguration();
 		langConfig = new YamlConfiguration();
 		langConfig.load(Paths.get(getClass().getClassLoader().getResource("reward-parser/lang.yml").toURI()).toFile());
-		underTest = new RewardParser(mainConfig, langConfig, advancedAchievements, new MaterialHelper(Logger.getGlobal()));
+		underTest = new RewardParser(mainConfig, langConfig, advancedAchievements, new MaterialHelper(Logger.getGlobal()),
+				new TaskScheduler(advancedAchievements, false));
 	}
 
 	@Test
@@ -125,8 +134,34 @@ class RewardParserTest {
 		Reward reward = rewards.get(0);
 		assertEquals(Arrays.asList("teleportation to somewhere special!"), reward.getListTexts());
 		assertEquals(Arrays.asList("You received your reward: teleportation to somewhere special!"), reward.getChatTexts());
-		reward.getRewarder().accept(player);
+		try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+			bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
+			reward.getRewarder().accept(player);
+		}
 		verify(server).dispatchCommand(any(), eq("teleport Pyves"));
+	}
+
+	@Test
+	void commandRewardsShouldBeDispatchedThroughGlobalThread() throws Exception {
+		// With Folia, achievements are awarded on region threads but console commands must run on the global region.
+		TaskScheduler taskScheduler = mock(TaskScheduler.class);
+		underTest = new RewardParser(mainConfig, langConfig, advancedAchievements, new MaterialHelper(Logger.getGlobal()),
+				taskScheduler);
+		World world = Mockito.mock(World.class);
+		mainConfig.load(Paths.get(getClass().getClassLoader().getResource("reward-parser/commands.yml").toURI()).toFile());
+		when(player.getName()).thenReturn("Pyves");
+		when(player.getLocation()).thenReturn(new Location(world, 1, 5, 8));
+		when(player.getWorld()).thenReturn(world);
+		when(world.getName()).thenReturn("Nether");
+
+		underTest.parseRewards("Reward").get(0).getRewarder().accept(player);
+
+		ArgumentCaptor<Runnable> dispatch = ArgumentCaptor.forClass(Runnable.class);
+		verify(taskScheduler).runOnGlobalThread(dispatch.capture());
+		verify(server, never()).dispatchCommand(any(), anyString());
+		dispatch.getValue().run();
+		verify(server).dispatchCommand(any(), eq("execute 1"));
+		verify(server).dispatchCommand(any(), eq("execute 2"));
 	}
 
 	@Test
@@ -145,7 +180,10 @@ class RewardParserTest {
 		assertEquals(Arrays.asList("display 1", "display 2"), reward.getListTexts());
 		assertEquals(Arrays.asList("You received your reward: display 1", "You received your reward: display 2"),
 				reward.getChatTexts());
-		reward.getRewarder().accept(player);
+		try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class)) {
+			bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
+			reward.getRewarder().accept(player);
+		}
 		verify(server).dispatchCommand(any(), eq("execute 1"));
 		verify(server).dispatchCommand(any(), eq("execute 2"));
 	}

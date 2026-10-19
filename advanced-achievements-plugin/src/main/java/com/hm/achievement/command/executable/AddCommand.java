@@ -19,6 +19,7 @@ import com.hm.achievement.category.NormalAchievements;
 import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.AbstractDatabaseManager;
 import com.hm.achievement.db.CacheManager;
+import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.StatisticIncreaseHandler;
 import com.hm.achievement.utils.StringHelper;
 
@@ -45,8 +46,9 @@ public class AddCommand extends AbstractParsableCommand {
 	@Inject
 	public AddCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
 			StringBuilder pluginHeader, AbstractDatabaseManager databaseManager, CacheManager cacheManager,
-			StatisticIncreaseHandler statisticIncreaseHandler, AchievementMap achievementMap) {
-		super(mainConfig, langConfig, pluginHeader);
+			StatisticIncreaseHandler statisticIncreaseHandler, AchievementMap achievementMap,
+			TaskScheduler taskScheduler) {
+		super(mainConfig, langConfig, pluginHeader, taskScheduler);
 		this.databaseManager = databaseManager;
 		this.cacheManager = cacheManager;
 		this.statisticIncreaseHandler = statisticIncreaseHandler;

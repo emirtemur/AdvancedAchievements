@@ -12,10 +12,10 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 
-import com.hm.achievement.AdvancedAchievements;
 import com.hm.achievement.category.NormalAchievements;
 import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.CacheManager;
+import com.hm.achievement.scheduler.TaskScheduler;
 
 /**
  * Listener class to deal with MusicDiscs achievements.
@@ -28,9 +28,9 @@ public class MusicDiscsListener extends AbstractRateLimitedListener {
 
 	@Inject
 	public MusicDiscsListener(@Named("main") YamlConfiguration mainConfig, AchievementMap achievementMap,
-			CacheManager cacheManager, AdvancedAchievements advancedAchievements,
+			CacheManager cacheManager, TaskScheduler taskScheduler,
 			@Named("lang") YamlConfiguration langConfig) {
-		super(NormalAchievements.MUSICDISCS, mainConfig, achievementMap, cacheManager, advancedAchievements, langConfig);
+		super(NormalAchievements.MUSICDISCS, mainConfig, achievementMap, cacheManager, taskScheduler, langConfig);
 	}
 
 	@EventHandler(priority = EventPriority.MONITOR) // Do NOT set ignoreCancelled to true, deprecated for this event.

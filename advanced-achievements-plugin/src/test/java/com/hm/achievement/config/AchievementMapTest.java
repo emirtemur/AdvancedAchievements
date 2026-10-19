@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -243,4 +244,30 @@ class AchievementMapTest {
 				underTest.getForCategory(MultipleAchievements.KILLS));
 	}
 
+	@Test
+	void replaceWithShouldNotAlterListsHeldByReaders() {
+		// With Folia, region threads may be iterating over achievements while a reload replaces them.
+		AchievementMap underTest = new AchievementMap();
+		Achievement oldAchievement = new AchievementBuilder()
+				.category(NormalAchievements.CONNECTIONS)
+				.name("connect_1")
+				.displayName("Old")
+				.threshold(1)
+				.build();
+		underTest.put(oldAchievement);
+		List<Achievement> heldByReader = underTest.getForCategory(NormalAchievements.CONNECTIONS);
+		AchievementMap replacement = new AchievementMap();
+		replacement.put(new AchievementBuilder()
+				.category(NormalAchievements.CONNECTIONS)
+				.name("connect_2")
+				.displayName("New")
+				.threshold(2)
+				.build());
+
+		underTest.replaceWith(replacement);
+
+		assertEquals(List.of(oldAchievement), heldByReader);
+		assertEquals("connect_2", underTest.getForCategory(NormalAchievements.CONNECTIONS).get(0).getName());
+		assertNull(underTest.getForName("connect_1"));
+	}
 }

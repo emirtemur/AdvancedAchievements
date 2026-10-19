@@ -3,10 +3,11 @@ package com.hm.achievement.command.executable;
 import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -23,12 +24,12 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BookMeta;
 
-import com.hm.achievement.AdvancedAchievements;
 import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.AbstractDatabaseManager;
 import com.hm.achievement.db.data.AwardedDBAchievement;
 import com.hm.achievement.domain.Achievement;
 import com.hm.achievement.lifecycle.Cleanable;
+import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.SoundPlayer;
 
 /**
@@ -42,8 +43,9 @@ import com.hm.achievement.utils.SoundPlayer;
 public class BookCommand extends AbstractCommand implements Cleanable {
 
 	// Corresponds to times at which players have received their books. Cooldown structure.
-	private final HashMap<UUID, Long> playersBookTime = new HashMap<>();
-	private final AdvancedAchievements advancedAchievements;
+	// Concurrent map as commands may be executed by several region threads with Folia.
+	private final Map<UUID, Long> playersBookTime = new ConcurrentHashMap<>();
+	private final TaskScheduler taskScheduler;
 	private final Logger logger;
 	private final AbstractDatabaseManager databaseManager;
 	private final SoundPlayer soundPlayer;
@@ -63,10 +65,10 @@ public class BookCommand extends AbstractCommand implements Cleanable {
 
 	@Inject
 	public BookCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			StringBuilder pluginHeader, AdvancedAchievements advancedAchievements, Logger logger,
+			StringBuilder pluginHeader, TaskScheduler taskScheduler, Logger logger,
 			AbstractDatabaseManager databaseManager, SoundPlayer soundPlayer, AchievementMap achievementMap) {
 		super(mainConfig, langConfig, pluginHeader);
-		this.advancedAchievements = advancedAchievements;
+		this.taskScheduler = taskScheduler;
 		this.logger = logger;
 		this.databaseManager = databaseManager;
 		this.soundPlayer = soundPlayer;
@@ -109,11 +111,11 @@ public class BookCommand extends AbstractCommand implements Cleanable {
 
 		if (!isInCooldownPeriod(player)) {
 			UUID playerId = player.getUniqueId();
-			advancedAchievements.getServer().getScheduler().runTaskAsynchronously(advancedAchievements, () -> {
+			taskScheduler.runAsync(() -> {
 				try {
 					List<AwardedDBAchievement> playerAchievementsList = databaseManager
 							.getPlayerAchievementsList(playerId);
-					advancedAchievements.getServer().getScheduler().runTask(advancedAchievements, () -> {
+					taskScheduler.runForEntity(player, () -> {
 						if (player.isOnline()) {
 							deliverBook(playerAchievementsList, player);
 						}

@@ -22,6 +22,7 @@ import com.hm.achievement.category.Category;
 import com.hm.achievement.command.pagination.CommandPagination;
 import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.AbstractDatabaseManager;
+import com.hm.achievement.scheduler.TaskScheduler;
 
 /** Provides a read-only health report for administrators. */
 @Singleton
@@ -34,16 +35,19 @@ public class DoctorCommand extends AbstractCommand {
 	private final AbstractDatabaseManager databaseManager;
 	private final AchievementMap achievementMap;
 	private final Set<Category> disabledCategories;
+	private final TaskScheduler taskScheduler;
 
 	@Inject
 	public DoctorCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
 			StringBuilder pluginHeader, AdvancedAchievements advancedAchievements,
-			AbstractDatabaseManager databaseManager, AchievementMap achievementMap, Set<Category> disabledCategories) {
+			AbstractDatabaseManager databaseManager, AchievementMap achievementMap, Set<Category> disabledCategories,
+			TaskScheduler taskScheduler) {
 		super(mainConfig, langConfig, pluginHeader);
 		this.advancedAchievements = advancedAchievements;
 		this.databaseManager = databaseManager;
 		this.achievementMap = achievementMap;
 		this.disabledCategories = disabledCategories;
+		this.taskScheduler = taskScheduler;
 	}
 
 	@Override
@@ -58,7 +62,7 @@ public class DoctorCommand extends AbstractCommand {
 		List<String> integrations = integrationStates();
 
 		sender.sendMessage(pluginHeader + langConfig.getString("doctor-running"));
-		advancedAchievements.getServer().getScheduler().runTaskAsynchronously(advancedAchievements, () -> {
+		taskScheduler.runAsync(() -> {
 			DoctorReport report = new DoctorReport();
 			report.ok("Advanced Achievements " + version + " is enabled.");
 			report.info("Platform: " + platform);
@@ -129,8 +133,7 @@ public class DoctorCommand extends AbstractCommand {
 			integrations.forEach(report::info);
 			report.info("This report is read-only; no settings or files were changed.");
 
-			advancedAchievements.getServer().getScheduler().runTask(advancedAchievements,
-					() -> sendReport(sender, page, report));
+			taskScheduler.runForSender(sender, () -> sendReport(sender, page, report));
 		});
 	}
 

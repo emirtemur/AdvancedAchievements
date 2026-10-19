@@ -41,6 +41,7 @@ import com.hm.achievement.listener.statistics.DropsListener;
 import com.hm.achievement.placeholder.AchievementPlaceholderHook;
 import com.hm.achievement.runnable.AchieveDistanceRunnable;
 import com.hm.achievement.runnable.AchievePlayTimeRunnable;
+import com.hm.achievement.scheduler.TaskScheduler;
 
 import dagger.Lazy;
 
@@ -61,7 +62,7 @@ class PluginLoaderTest {
 				mock(AbstractDatabaseManager.class), mock(AsyncCachedRequestsSender.class),
 				mock(PluginCommandExecutor.class), mock(CommandTabCompleter.class), Collections.emptySet(),
 				new YamlConfiguration(), mock(ConfigurationParser.class), mock(AchieveDistanceRunnable.class),
-				mock(AchievePlayTimeRunnable.class), mock(ReloadCommand.class), mock(JobsEnableWatcher.class));
+				mock(AchievePlayTimeRunnable.class), mock(ReloadCommand.class), mock(JobsEnableWatcher.class), new TaskScheduler(plugin, false));
 
 		underTest.registerListeners();
 
@@ -85,7 +86,7 @@ class PluginLoaderTest {
 				mock(AsyncCachedRequestsSender.class), mock(PluginCommandExecutor.class), mock(CommandTabCompleter.class),
 				Collections.singleton(NormalAchievements.DROPS), new YamlConfiguration(), mock(ConfigurationParser.class),
 				mock(AchieveDistanceRunnable.class), mock(AchievePlayTimeRunnable.class), mock(ReloadCommand.class),
-				mock(JobsEnableWatcher.class));
+				mock(JobsEnableWatcher.class), new TaskScheduler(plugin, false));
 
 		underTest.registerListeners();
 
@@ -106,7 +107,7 @@ class PluginLoaderTest {
 				mock(AbstractDatabaseManager.class), requestsSender, mock(PluginCommandExecutor.class),
 				mock(CommandTabCompleter.class), disabledCategories, mainConfig, mock(ConfigurationParser.class),
 				mock(AchieveDistanceRunnable.class), mock(AchievePlayTimeRunnable.class), mock(ReloadCommand.class),
-				mock(JobsEnableWatcher.class));
+				mock(JobsEnableWatcher.class), new TaskScheduler(plugin, false));
 		BukkitScheduler scheduler = mock(BukkitScheduler.class);
 		BukkitTask firstSenderTask = mock(BukkitTask.class);
 		BukkitTask secondSenderTask = mock(BukkitTask.class);

@@ -15,6 +15,7 @@ import org.bukkit.entity.Player;
 import com.hm.achievement.exception.PluginLoadError;
 import com.hm.achievement.lifecycle.PluginLoader;
 import com.hm.achievement.lifecycle.Reloadable;
+import com.hm.achievement.scheduler.TaskScheduler;
 
 import dagger.Lazy;
 
@@ -30,6 +31,7 @@ public class ReloadCommand extends AbstractCommand {
 	private final Logger logger;
 	private final Lazy<PluginLoader> pluginLoader;
 	private final Lazy<Set<Reloadable>> reloadables;
+	private final TaskScheduler taskScheduler;
 
 	private String langConfigReloadFailed;
 	private String langConfigSuccessfullyReloaded;
@@ -37,11 +39,12 @@ public class ReloadCommand extends AbstractCommand {
 	@Inject
 	public ReloadCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
 			StringBuilder pluginHeader, Logger logger, Lazy<PluginLoader> pluginLoader,
-			Lazy<Set<Reloadable>> reloadables) {
+			Lazy<Set<Reloadable>> reloadables, TaskScheduler taskScheduler) {
 		super(mainConfig, langConfig, pluginHeader);
 		this.logger = logger;
 		this.pluginLoader = pluginLoader;
 		this.reloadables = reloadables;
+		this.taskScheduler = taskScheduler;
 	}
 
 	@Override
@@ -65,6 +68,11 @@ public class ReloadCommand extends AbstractCommand {
 
 	@Override
 	void onExecute(CommandSender sender, String[] args) {
+		// Reloading re-registers listeners and reschedules server-wide tasks: with Folia, run it on the global region.
+		taskScheduler.runOnGlobalThread(() -> reload(sender));
+	}
+
+	private void reload(CommandSender sender) {
 		try {
 			pluginLoader.get().loadAdvancedAchievements();
 		} catch (PluginLoadError e) {

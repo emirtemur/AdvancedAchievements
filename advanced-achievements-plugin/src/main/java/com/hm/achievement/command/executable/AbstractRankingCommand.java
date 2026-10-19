@@ -16,9 +16,9 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
-import com.hm.achievement.AdvancedAchievements;
 import com.hm.achievement.command.pagination.CommandPagination;
 import com.hm.achievement.db.AbstractDatabaseManager;
+import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.SoundPlayer;
 import com.hm.achievement.utils.ColorHelper;
 
@@ -38,7 +38,7 @@ public abstract class AbstractRankingCommand extends AbstractCommand {
 	private static final int PER_PAGE = 16;
 
 	private final Logger logger;
-	private final AdvancedAchievements advancedAchievements;
+	private final TaskScheduler taskScheduler;
 	private final String languageKey;
 	private final AbstractDatabaseManager databaseManager;
 	private final SoundPlayer soundPlayer;
@@ -51,18 +51,18 @@ public abstract class AbstractRankingCommand extends AbstractCommand {
 	private String langPeriodAchievement;
 	private String langPlayerRank;
 	private String langNotRanked;
-	// Used for caching.
-	private Map<String, Integer> cachedSortedRankings;
-	private List<Integer> cachedAchievementCounts;
+	// Used for caching. Commands may be executed concurrently by several region threads with Folia: the cache state is
+	// guarded by this object's monitor and rankings are handed over as immutable snapshots.
+	private Rankings cachedRankings;
 	private final List<RankingRequest> pendingRequests = new ArrayList<>();
 	private boolean cacheRefreshInProgress;
 	private long lastCacheUpdate = 0L;
 
 	AbstractRankingCommand(YamlConfiguration mainConfig, YamlConfiguration langConfig, StringBuilder pluginHeader,
-			AdvancedAchievements advancedAchievements, Logger logger, String languageKey,
+			TaskScheduler taskScheduler, Logger logger, String languageKey,
 			AbstractDatabaseManager databaseManager, SoundPlayer soundPlayer) {
 		super(mainConfig, langConfig, pluginHeader);
-		this.advancedAchievements = advancedAchievements;
+		this.taskScheduler = taskScheduler;
 		this.logger = logger;
 		this.languageKey = languageKey;
 		this.databaseManager = databaseManager;
@@ -86,46 +86,63 @@ public abstract class AbstractRankingCommand extends AbstractCommand {
 
 	@Override
 	public void onExecute(CommandSender sender, String[] args) {
-		if (System.currentTimeMillis() - lastCacheUpdate >= CACHE_EXPIRATION_DELAY) {
-			pendingRequests.add(new RankingRequest(sender, args.clone()));
-			if (cacheRefreshInProgress) {
-				return;
-			}
-			cacheRefreshInProgress = true;
-			long rankingStartTime = getRankingStartTime();
-			advancedAchievements.getServer().getScheduler().runTaskAsynchronously(advancedAchievements, () -> {
-				try {
-					Map<String, Integer> rankings = databaseManager.getTopList(rankingStartTime);
-					advancedAchievements.getServer().getScheduler().runTask(advancedAchievements, () -> {
-						cachedSortedRankings = rankings;
-						cachedAchievementCounts = new ArrayList<>(rankings.values());
-						lastCacheUpdate = System.currentTimeMillis();
-						cacheRefreshInProgress = false;
-						List<RankingRequest> requests = new ArrayList<>(pendingRequests);
-						pendingRequests.clear();
-						for (RankingRequest request : requests) {
-							if (!(request.sender instanceof Player) || ((Player) request.sender).isOnline()) {
-								displayRankings(request.sender, request.arguments);
-							}
-						}
-					});
-				} catch (RuntimeException e) {
-					logger.log(java.util.logging.Level.SEVERE, "Could not load achievement rankings.", e);
-					advancedAchievements.getServer().getScheduler().runTask(advancedAchievements, () -> {
-						cacheRefreshInProgress = false;
-						pendingRequests.clear();
-					});
+		Rankings rankings;
+		boolean startRefresh = false;
+		synchronized (this) {
+			if (System.currentTimeMillis() - lastCacheUpdate < CACHE_EXPIRATION_DELAY) {
+				rankings = cachedRankings;
+			} else {
+				rankings = null;
+				pendingRequests.add(new RankingRequest(sender, args.clone()));
+				if (!cacheRefreshInProgress) {
+					cacheRefreshInProgress = true;
+					startRefresh = true;
 				}
-			});
-			return;
+			}
 		}
-		displayRankings(sender, args);
+		if (rankings != null) {
+			displayRankings(sender, args, rankings);
+		} else if (startRefresh) {
+			refreshRankings(getRankingStartTime());
+		}
 	}
 
-	private void displayRankings(CommandSender sender, String[] args) {
+	private void refreshRankings(long rankingStartTime) {
+		taskScheduler.runAsync(() -> {
+			Rankings rankings;
+			try {
+				rankings = new Rankings(databaseManager.getTopList(rankingStartTime));
+			} catch (RuntimeException e) {
+				logger.log(java.util.logging.Level.SEVERE, "Could not load achievement rankings.", e);
+				synchronized (this) {
+					cacheRefreshInProgress = false;
+					pendingRequests.clear();
+				}
+				return;
+			}
+			List<RankingRequest> requests;
+			synchronized (this) {
+				cachedRankings = rankings;
+				lastCacheUpdate = System.currentTimeMillis();
+				cacheRefreshInProgress = false;
+				requests = new ArrayList<>(pendingRequests);
+				pendingRequests.clear();
+			}
+			for (RankingRequest request : requests) {
+				// Deliver each response on the thread owning the sender (player's region or global region).
+				taskScheduler.runForSender(request.sender, () -> {
+					if (!(request.sender instanceof Player) || ((Player) request.sender).isOnline()) {
+						displayRankings(request.sender, request.arguments, rankings);
+					}
+				});
+			}
+		});
+	}
+
+	private void displayRankings(CommandSender sender, String[] args, Rankings rankings) {
 		sender.sendMessage(langPeriodAchievement);
 
-		List<String> rankingMessages = getRankingMessages(sender);
+		List<String> rankingMessages = getRankingMessages(sender, rankings);
 
 		// If config has top set at less than one page, don't use pagination.
 		if (configTopList < PER_PAGE) {
@@ -137,19 +154,19 @@ public abstract class AbstractRankingCommand extends AbstractCommand {
 		}
 
 		if (sender instanceof Player) {
-			Integer achievementsCount = cachedSortedRankings.get(((Player) sender).getUniqueId().toString());
+			Integer achievementsCount = rankings.sortedRankings.get(((Player) sender).getUniqueId().toString());
 			// If not entry in the map, player has not yet received an achievement for this period, not ranked.
 			if (achievementsCount == null) {
 				sender.sendMessage(langNotRanked);
 			} else {
 				// Rank is the first index in the list that has received as many achievements as the player.
-				int playerRank = cachedAchievementCounts.indexOf(achievementsCount) + 1;
+				int playerRank = rankings.achievementCounts.indexOf(achievementsCount) + 1;
 				// Launch effect if player is in top list.
 				if (playerRank <= configTopList) {
 					launchEffects((Player) sender);
 				}
 				sender.sendMessage(
-						langPlayerRank + playerRank + ChatColor.GRAY + "/" + configColor + cachedSortedRankings.size());
+						langPlayerRank + playerRank + ChatColor.GRAY + "/" + configColor + rankings.sortedRankings.size());
 			}
 		}
 	}
@@ -158,10 +175,10 @@ public abstract class AbstractRankingCommand extends AbstractCommand {
 		return args.length > 1 && NumberUtils.isDigits(args[1]) ? Integer.parseInt(args[1]) : 1;
 	}
 
-	private List<String> getRankingMessages(CommandSender sender) {
+	private List<String> getRankingMessages(CommandSender sender, Rankings rankings) {
 		List<String> rankingMessages = new ArrayList<>();
 		int currentRank = 1;
-		for (Entry<String, Integer> ranking : cachedSortedRankings.entrySet()) {
+		for (Entry<String, Integer> ranking : rankings.sortedRankings.entrySet()) {
 			String playerName = Bukkit.getOfflinePlayer(UUID.fromString(ranking.getKey())).getName();
 			if (playerName != null) {
 				// Color the name of the player if he is in the top list.
@@ -198,6 +215,17 @@ public abstract class AbstractRankingCommand extends AbstractCommand {
 			decimalRankSymbol = DECIMAL_CIRCLED_THIRTY_SIX + rank - 36;
 		}
 		return StringEscapeUtils.unescapeJava("\\u" + Integer.toHexString(decimalRankSymbol));
+	}
+
+	private static final class Rankings {
+
+		private final Map<String, Integer> sortedRankings;
+		private final List<Integer> achievementCounts;
+
+		private Rankings(Map<String, Integer> sortedRankings) {
+			this.sortedRankings = sortedRankings;
+			this.achievementCounts = new ArrayList<>(sortedRankings.values());
+		}
 	}
 
 	private static class RankingRequest {

@@ -9,10 +9,10 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.PlayerBedEnterEvent;
 
-import com.hm.achievement.AdvancedAchievements;
 import com.hm.achievement.category.NormalAchievements;
 import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.CacheManager;
+import com.hm.achievement.scheduler.TaskScheduler;
 
 /**
  * Listener class to deal with Beds achievements.
@@ -25,9 +25,9 @@ public class BedsListener extends AbstractRateLimitedListener {
 
 	@Inject
 	public BedsListener(@Named("main") YamlConfiguration mainConfig, AchievementMap achievementMap,
-			CacheManager cacheManager, AdvancedAchievements advancedAchievements,
+			CacheManager cacheManager, TaskScheduler taskScheduler,
 			@Named("lang") YamlConfiguration langConfig) {
-		super(NormalAchievements.BEDS, mainConfig, achievementMap, cacheManager, advancedAchievements, langConfig);
+		super(NormalAchievements.BEDS, mainConfig, achievementMap, cacheManager, taskScheduler, langConfig);
 	}
 
 	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

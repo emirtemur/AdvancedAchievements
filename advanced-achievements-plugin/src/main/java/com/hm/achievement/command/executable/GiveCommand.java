@@ -17,6 +17,7 @@ import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.CacheManager;
 import com.hm.achievement.domain.Achievement;
 import com.hm.achievement.listener.PlayerAdvancedAchievementListener;
+import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.StringHelper;
 
 /**
@@ -40,8 +41,8 @@ public class GiveCommand extends AbstractParsableCommand {
 	@Inject
 	public GiveCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
 			StringBuilder pluginHeader, CacheManager cacheManager, AchievementMap achievementMap,
-			PlayerAdvancedAchievementListener playerAdvancedAchievementListener) {
-		super(mainConfig, langConfig, pluginHeader);
+			PlayerAdvancedAchievementListener playerAdvancedAchievementListener, TaskScheduler taskScheduler) {
+		super(mainConfig, langConfig, pluginHeader, taskScheduler);
 		this.cacheManager = cacheManager;
 		this.achievementMap = achievementMap;
 		this.playerAdvancedAchievementListener = playerAdvancedAchievementListener;

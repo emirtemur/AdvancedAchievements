@@ -14,6 +14,7 @@ import org.bukkit.entity.Player;
 
 import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.CacheManager;
+import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.StringHelper;
 
 /**
@@ -37,8 +38,9 @@ public class ResetCommand extends AbstractParsableCommand {
 
 	@Inject
 	public ResetCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			StringBuilder pluginHeader, CacheManager cacheManager, AchievementMap achievementMap) {
-		super(mainConfig, langConfig, pluginHeader);
+			StringBuilder pluginHeader, CacheManager cacheManager, AchievementMap achievementMap,
+			TaskScheduler taskScheduler) {
+		super(mainConfig, langConfig, pluginHeader, taskScheduler);
 		this.cacheManager = cacheManager;
 		this.achievementMap = achievementMap;
 	}

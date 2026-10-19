@@ -32,6 +32,7 @@ import org.bukkit.plugin.RegisteredServiceProvider;
 
 import com.hm.achievement.AdvancedAchievements;
 import com.hm.achievement.domain.Reward;
+import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.ColorHelper;
 import com.hm.achievement.utils.MaterialHelper;
 import com.hm.achievement.utils.StringHelper;
@@ -52,16 +53,18 @@ public class RewardParser {
 	private final YamlConfiguration langConfig;
 	private final Server server;
 	private final MaterialHelper materialHelper;
+	private final TaskScheduler taskScheduler;
 
 	// Used for Vault plugin integration.
 	private Economy economy;
 
 	@Inject
 	public RewardParser(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
-			AdvancedAchievements advancedAchievements, MaterialHelper materialHelper) {
+			AdvancedAchievements advancedAchievements, MaterialHelper materialHelper, TaskScheduler taskScheduler) {
 		this.mainConfig = mainConfig;
 		this.langConfig = langConfig;
 		this.materialHelper = materialHelper;
+		this.taskScheduler = taskScheduler;
 		this.server = advancedAchievements.getServer();
 		// Try to retrieve an Economy instance from Vault.
 		if (server.getPluginManager().isPluginEnabled("Vault")) {
@@ -78,17 +81,19 @@ public class RewardParser {
 
 	RewardParser withConfigurations(YamlConfiguration replacementMainConfig,
 			YamlConfiguration replacementLangConfig) {
-		RewardParser replacement = new RewardParser(replacementMainConfig, replacementLangConfig, server, materialHelper);
+		RewardParser replacement = new RewardParser(replacementMainConfig, replacementLangConfig, server, materialHelper,
+				taskScheduler);
 		replacement.economy = economy;
 		return replacement;
 	}
 
 	private RewardParser(YamlConfiguration mainConfig, YamlConfiguration langConfig, Server server,
-			MaterialHelper materialHelper) {
+			MaterialHelper materialHelper, TaskScheduler taskScheduler) {
 		this.mainConfig = mainConfig;
 		this.langConfig = langConfig;
 		this.server = server;
 		this.materialHelper = materialHelper;
+		this.taskScheduler = taskScheduler;
 	}
 
 	public List<Reward> parseRewards(String path) {
@@ -225,6 +230,9 @@ public class RewardParser {
 		String executePath = configSection.contains("Command") ? "Command.Execute" : "Commands.Execute";
 
 		Consumer<Player> rewarder = player -> {
+			// Placeholders are resolved on the player's thread, before handing commands over to the thread allowed to
+			// dispatch console commands (global region thread with Folia).
+			List<String> commands = new ArrayList<>();
 			for (String raw : getOneOrManyConfigStrings(configSection, executePath)) {
 				if (raw == null)
 					continue;
@@ -237,27 +245,36 @@ public class RewardParser {
 				if (command.charAt(0) == '/') {
 					command = command.substring(1);
 				}
-
-				try {
-					boolean ok = server.dispatchCommand(server.getConsoleSender(), command);
-					if (!ok) {
-						server.getLogger()
-								.warning("[AdvancedAchievements] Reward command returned false (unknown?): " + command);
-					}
-				} catch (CommandException ex) {
-					server.getLogger().log(Level.SEVERE,
-							"[AdvancedAchievements] Reward command failed for " + player.getName() + ": " + command, ex);
-				} catch (Throwable t) {
-					// Extra safety: don't let *anything* here kill the achievement flow.
-					server.getLogger().log(Level.SEVERE,
-							"[AdvancedAchievements] Unexpected error running reward command for "
-									+ player.getName() + ": " + command,
-							t);
-				}
+				commands.add(command);
+			}
+			if (!commands.isEmpty()) {
+				String playerName = player.getName();
+				taskScheduler.runOnGlobalThread(() -> dispatchRewardCommands(commands, playerName));
 			}
 		};
 
 		return new Reward(listTexts, chatTexts, rewarder);
+	}
+
+	private void dispatchRewardCommands(List<String> commands, String playerName) {
+		for (String command : commands) {
+			try {
+				boolean ok = server.dispatchCommand(server.getConsoleSender(), command);
+				if (!ok) {
+					server.getLogger()
+							.warning("[AdvancedAchievements] Reward command returned false (unknown?): " + command);
+				}
+			} catch (CommandException ex) {
+				server.getLogger().log(Level.SEVERE,
+						"[AdvancedAchievements] Reward command failed for " + playerName + ": " + command, ex);
+			} catch (Throwable t) {
+				// Extra safety: don't let *anything* here kill the achievement flow.
+				server.getLogger().log(Level.SEVERE,
+						"[AdvancedAchievements] Unexpected error running reward command for " + playerName + ": "
+								+ command,
+						t);
+			}
+		}
 	}
 
 	private List<String> getOneOrManyConfigStrings(ConfigurationSection configSection, String path) {

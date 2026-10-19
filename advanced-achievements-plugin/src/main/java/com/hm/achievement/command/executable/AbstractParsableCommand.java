@@ -7,6 +7,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
 import com.hm.achievement.command.external.CommandUtils;
+import com.hm.achievement.scheduler.TaskScheduler;
 
 /**
  * Abstract class in charge of factoring out common functionality for commands with more than one argument (/aach give,
@@ -16,11 +17,15 @@ import com.hm.achievement.command.external.CommandUtils;
  */
 public abstract class AbstractParsableCommand extends AbstractCommand {
 
+	private final TaskScheduler taskScheduler;
+
 	private String langPlayerOffline;
 	private String langEntityNotPlayer;
 
-	AbstractParsableCommand(YamlConfiguration mainConfig, YamlConfiguration langConfig, StringBuilder pluginHeader) {
+	AbstractParsableCommand(YamlConfiguration mainConfig, YamlConfiguration langConfig, StringBuilder pluginHeader,
+			TaskScheduler taskScheduler) {
 		super(mainConfig, langConfig, pluginHeader);
+		this.taskScheduler = taskScheduler;
 	}
 
 	@Override
@@ -54,7 +59,10 @@ public abstract class AbstractParsableCommand extends AbstractCommand {
 				break;
 			}
 			if (entity instanceof Player) {
-				onExecuteForPlayer(sender, args, (Player) entity);
+				// With Folia, the target player's data must be accessed from the region thread owning them. This also
+				// serialises "already received" checks with achievement awards for that player.
+				Player player = (Player) entity;
+				taskScheduler.runOnEntityThread(player, () -> onExecuteForPlayer(sender, args, player));
 			} else {
 				sender.sendMessage(pluginHeader + StringUtils.replaceOnce(langEntityNotPlayer, "ENTITY", entity.getName()));
 			}

@@ -22,12 +22,12 @@ import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.potion.PotionType;
 import org.junit.jupiter.api.Test;
 
-import com.hm.achievement.AdvancedAchievements;
 import com.hm.achievement.category.MultipleAchievements;
 import com.hm.achievement.category.NormalAchievements;
 import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.CacheManager;
 import com.hm.achievement.domain.Achievement.AchievementBuilder;
+import com.hm.achievement.scheduler.TaskScheduler;
 import com.hm.achievement.utils.MaterialHelper;
 
 class BrewingListenerTest {
@@ -45,7 +45,7 @@ class BrewingListenerTest {
 		CacheManager cacheManager = mock(CacheManager.class);
 		MaterialHelper materialHelper = mock(MaterialHelper.class);
 		BrewingListener underTest = new BrewingListener(new YamlConfiguration(), achievementMap, cacheManager,
-				mock(AdvancedAchievements.class), new YamlConfiguration(), materialHelper);
+				mock(TaskScheduler.class), new YamlConfiguration(), materialHelper);
 		underTest.extractConfigurationParameters();
 
 		UUID playerId = UUID.randomUUID();
@@ -79,7 +79,7 @@ class BrewingListenerTest {
 		CacheManager cacheManager = mock(CacheManager.class);
 		MaterialHelper materialHelper = mock(MaterialHelper.class);
 		BrewingListener underTest = new BrewingListener(new YamlConfiguration(), achievementMap, cacheManager,
-				mock(AdvancedAchievements.class), new YamlConfiguration(), materialHelper);
+				mock(TaskScheduler.class), new YamlConfiguration(), materialHelper);
 		underTest.extractConfigurationParameters();
 
 		UUID playerId = UUID.randomUUID();

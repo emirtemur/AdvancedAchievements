@@ -46,6 +46,13 @@ class PluginDescriptorTest {
 		assertEquals("https://github.com/LucidAPs/AdvancedAchievements", descriptor.getString("website"));
 	}
 
+	@Test
+	void descriptorDeclaresFoliaSupport() {
+		YamlConfiguration descriptor = YamlConfiguration.loadConfiguration(new InputStreamReader(
+				PluginDescriptorTest.class.getResourceAsStream("/plugin.yml"), StandardCharsets.UTF_8));
+		assertTrue(descriptor.getBoolean("folia-supported"), "Folia refuses to load plugins without folia-supported");
+	}
+
 	private List<Class<? extends AbstractCommand>> commandClasses() {
 		return List.of(AddCommand.class, BookCommand.class, CheckCommand.class, DeleteCommand.class, DoctorCommand.class,
 				EasterEggCommand.class, GenerateCommand.class, GiveCommand.class, HelpCommand.class, InfoCommand.class,

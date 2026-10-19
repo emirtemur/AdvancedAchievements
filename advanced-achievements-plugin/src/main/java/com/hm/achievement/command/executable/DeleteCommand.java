@@ -14,6 +14,7 @@ import org.bukkit.entity.Player;
 import com.hm.achievement.config.AchievementMap;
 import com.hm.achievement.db.AbstractDatabaseManager;
 import com.hm.achievement.db.CacheManager;
+import com.hm.achievement.scheduler.TaskScheduler;
 
 /**
  * Class in charge of handling the /aach delete command, which deletes an achievement from a player.
@@ -37,8 +38,8 @@ public class DeleteCommand extends AbstractParsableCommand {
 	@Inject
 	public DeleteCommand(@Named("main") YamlConfiguration mainConfig, @Named("lang") YamlConfiguration langConfig,
 			StringBuilder pluginHeader, CacheManager cacheManager, AbstractDatabaseManager databaseManager,
-			AchievementMap achievementMap) {
-		super(mainConfig, langConfig, pluginHeader);
+			AchievementMap achievementMap, TaskScheduler taskScheduler) {
+		super(mainConfig, langConfig, pluginHeader, taskScheduler);
 		this.cacheManager = cacheManager;
 		this.databaseManager = databaseManager;
 		this.achievementMap = achievementMap;
